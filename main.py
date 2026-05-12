@@ -4,12 +4,12 @@ import requests
 API_KEY = st.secrets["API_KEY"]
 HEADERS = {'x-rapidapi-key': API_KEY}
 
-st.set_page_config(page_title="IA Rei da Bola: Híbrido", page_icon="🏆", layout="wide")
+st.set_page_config(page_title="IA Rei da Bola", page_icon="⚽", layout="wide")
 
-st.title("🏆 IA Rei da Bola: Análise Híbrida")
-st.sidebar.info("IA + API-Football + SofaScore (Manual Check)")
+st.title("⚽ IA Rei da Bola: Analisador de Elite")
+st.markdown("---")
 
-if st.button("🔥 SCANEAR MERCADO"):
+if st.button("🚀 SCANEAR OPORTUNIDADES"):
     url = "https://v3.football.api-sports.io/fixtures?live=all"
     res = requests.get(url, headers=HEADERS).json()
     
@@ -21,6 +21,8 @@ if st.button("🔥 SCANEAR MERCADO"):
             id_jogo = j['fixture']['id']
             casa = j['teams']['home']['name']
             fora = j['teams']['away']['name']
+            p_casa = j['goals']['home'] if j['goals']['home'] is not None else 0
+            p_fora = j['goals']['away'] if j['goals']['away'] is not None else 0
             liga = j['league']['name']
             
             # BUSCA ESTATÍSTICAS
@@ -36,30 +38,29 @@ if st.button("🔥 SCANEAR MERCADO"):
                         if stat['type'] == 'Dangerous Attacks' and stat['value']: ataques_p += stat['value']
                         if stat['type'] == 'Corner Kicks' and stat['value']: escanteios += stat['value']
 
-            # CÁLCULOS SEPARADOS (GOLS vs CANTOS)
+            # LÓGICA DE ÍNDICES (A que você aprovou)
             ig = (no_alvo * 8) + (ataques_p / 5)
             ic = ((no_alvo + fora_alvo) * 3) + (ataques_p / 3)
             
             with st.container():
-                c1, c2, c3 = st.columns([2, 2, 1.5])
+                c1, c2, c3 = st.columns([2, 2, 1])
                 with c1:
-                    st.subheader(f"{casa} x {fora}")
-                    st.caption(f"🏆 {liga} | ⏰ {tempo}'")
-                    # Link dinâmico para o SofaScore (Busca automática pelo nome dos times)
-                    search_url = f"https://www.sofascore.com/search?q={casa.replace(' ', '+')}+vs+{fora.replace(' ', '+')}"
-                    st.markdown(f"[📊 **Abrir Momentum no SofaScore**]({search_url})")
+                    st.subheader(f"{casa} {p_casa} x {p_fora} {fora}")
+                    st.caption(f"🏆 {liga} • {tempo} min")
+                    st.write(f"🎯 No Alvo: {no_alvo} | 👟 Chutes Totais: {no_alvo + fora_alvo}")
+                    st.write(f"🚩 Escanteios: {escanteios}")
                 
                 with c2:
-                    if ig > 40: st.success(f"⚽ IG: {ig:.1f} (Foco: Gol)")
-                    if ic > 35: st.warning(f"🚩 IC: {ic:.1f} (Foco: Cantos)")
+                    if ig > 40: st.success(f"⚽ IG (GOLS): {ig:.1f}")
+                    if ic > 35: st.warning(f"🚩 IC (CANTOS): {ic:.1f}")
                     if ig <= 40 and ic <= 35: st.info("⚖️ Jogo Neutro")
                 
                 with c3:
                     if ic > 40 and tempo > 70:
-                        st.button("💰 ENTRAR: CANTOS", key=f"c_{id_jogo}")
+                        st.button("💰 PALPITE: CANTOS+", key=f"c_{id_jogo}")
                     elif ig > 45 and tempo < 40:
-                        st.button("⚽ ENTRAR: GOL HT", key=f"h_{id_jogo}")
+                        st.button("⚽ PALPITE: GOL HT", key=f"h_{id_jogo}")
                     else:
-                        st.write("👀 Aguardando Padrão...")
+                        st.button("👀 AGUARDAR", key=f"n_{id_jogo}")
                 st.markdown("---")
                 
