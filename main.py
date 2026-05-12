@@ -2,10 +2,10 @@ import streamlit as st
 import requests
 from streamlit_autorefresh import st_autorefresh
 
-# Auto-refresh a cada 3 minutos para ser mais dinâmico
+# Auto-refresh a cada 3 minutos
 st_autorefresh(interval=180000, key="bot_refresh")
 
-# Configuração de chaves
+# Chaves nos Secrets
 API_KEY = st.secrets["API_KEY"]
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 CHAT_ID = st.secrets["CHAT_ID"]
@@ -22,19 +22,18 @@ def enviar_telegram(msg):
 
 st.set_page_config(page_title="IA Rei do Red: Visual Pro", layout="wide")
 
-# --- CABEÇALHO ---
-st.markdown("<h1 style='text-align: center; color: #EDECEC;'>📊 CENTRAL DE INTELIGÊNCIA ESPORTIVA</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>📊 CENTRAL DE INTELIGÊNCIA</h1>", unsafe_allow_html=True)
 
 # --- PAINEL DE PERFORMANCE ---
 c_g, c_r, c_a = st.columns(3)
 with c_g:
-    st.markdown(f"<div style='background-color:#1b4332; padding:15px; border-radius:10px; border: 2px solid #2d6a4f; text-align:center'><h3 style='color:#74c69d; margin:0'>✅ GREENS</h3><h1 style='color:white; margin:0'>{st.session_state.greens}</h1></div>", unsafe_allow_html=True)
+    st.success(f"✅ GREENS: {st.session_state.greens}")
 with c_r:
-    st.markdown(f"<div style='background-color:#431b1b; padding:15px; border-radius:10px; border: 2px solid #6a2d2d; text-align:center'><h3 style='color:#ff8787; margin:0'>❌ REDS</h3><h1 style='color:white; margin:0'>{st.session_state.reds}</h1></div>", unsafe_allow_html=True)
+    st.error(f"❌ REDS: {st.session_state.reds}")
 with c_a:
     total = st.session_state.greens + st.session_state.reds
-    assertividade = (st.session_state.greens / total * 100) if total > 0 else 0
-    st.markdown(f"<div style='background-color:#2b2d42; padding:15px; border-radius:10px; border: 2px solid #8d99ae; text-align:center'><h3 style='color:#edf2f4; margin:0'>📈 TAXA DE ACERTO</h3><h1 style='color:white; margin:0'>{assertividade:.1f}%</h1></div>", unsafe_allow_html=True)
+    acc = (st.session_state.greens / total * 100) if total > 0 else 0
+    st.info(f"📈 ACERTO: {acc:.1f}%")
 
 st.markdown("---")
 
@@ -49,7 +48,7 @@ if res.get('response'):
         st.subheader("🔥 Alertas de Alta Pressão")
         
     with col_radar:
-        st.subheader("📡 Radar Global (Analisando)")
+        st.subheader("📡 Radar Global")
 
     for j in res['response']:
         tempo = j['fixture']['status']['elapsed'] or 0
@@ -58,9 +57,9 @@ if res.get('response'):
         casa = j['teams']['home']['name']
         fora = j['teams']['away']['name']
         id_j = j['fixture']['id']
-        placar = f"{j['goals']['home']} - {j['goals']['away']}"
+        placar = f"{j.get('goals', {}).get('home', 0)} - {j.get('goals', {}).get('away', 0)}"
 
-        # Busca Stats
+        # Stats
         u_s = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={id_j}"
         s_res = requests.get(u_s, headers={'x-rapidapi-key': API_KEY}).json()
         
@@ -75,13 +74,28 @@ if res.get('response'):
         ig = (no_alvo * 8) + (ataques_p / 5)
         ic = ((no_alvo + fora_alvo) * 3) + (ataques_p / 3)
 
-        # 1. LÓGICA DE ALERTA (IG 50+)
+        # 1. ALERTAS
         if ig >= 50 or ic >= 45:
             with col_alertas:
-                with st.container():
-                    st.markdown(f"**{casa} {placar} {fora}** | ⏰ {tempo}'")
-                    st.progress(min(ig/100, 1.0))
-                    c1, c2, c3 = st.columns([1,1,1])
-                    c1.button(f"✅ Green", key=f"g_{id_j}", on_click=lambda: setattr(st.session_state, 'greens', st.session_state.greens + 1))
-                    c2.button(f"❌ Red", key=f"r_{id_j
-                    
+                st.markdown(f"**{casa} {placar} {fora}** ({tempo}')")
+                btn_g, btn_r = st.columns(2)
+                if btn_g.button(f"✅ Green", key=f"g_{id_j}"):
+                    st.session_state.greens += 1
+                    st.rerun()
+                if btn_r.button(f"❌ Red", key=f"r_{id_j}"):
+                    st.session_state.reds += 1
+                    st.rerun()
+                
+                if f"sent_{id_j}" not in st.session_state:
+                    enviar_telegram(f"🚨 ENTRADA!\n🏟️ {casa} x {fora}\n📈 IG: {ig:.1f}")
+                    st.session_state[f"sent_{id_j}"] = True
+                st.markdown("---")
+
+        # 2. RADAR
+        with col_radar:
+            with st.expander(f"⚽ {casa} x {fora}"):
+                st.write(f"IG: {ig:.1f} | IC: {ic:.1f} | Tempo: {tempo}'")
+
+else:
+    st.info("Varrendo o mercado...")
+    
