@@ -1,40 +1,45 @@
 import streamlit as st
 import requests
-import pandas as pd
 
-# Puxa a chave dos "Secrets" do Streamlit
+# Puxa a chave dos "Secrets"
 API_KEY = st.secrets["API_KEY"]
 HEADERS = {'x-rapidapi-key': API_KEY}
 
-st.set_page_config(page_title="IA Pro Stats", page_icon="📈", layout="wide")
+st.set_page_config(page_title="IA Pro Stats", page_icon="📈")
 
 st.title("🚀 IA Esportiva: Analisador Pro")
 
-aba_fut, aba_basq = st.tabs(["⚽ Futebol (Série A)", "🏀 Basquete (NBA)"])
+aba_fut, aba_basq = st.tabs(["⚽ Futebol Ao Vivo", "🏀 Basquete (NBA)"])
 
 with aba_fut:
-    st.header("Análise de Jogos e Escalações")
-    if st.button("Atualizar Futebol"):
-        url = "https://v3.football.api-sports.io/fixtures?live=all&league=71"
+    st.header("Análise de Pressão e Gols")
+    if st.button("Buscar Jogos no Mundo"):
+        # Agora busca TODOS os jogos ao vivo (live=all)
+        url = "https://v3.football.api-sports.io/fixtures?live=all"
         res = requests.get(url, headers=HEADERS).json()
         
         if res['response']:
             for j in res['response']:
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    st.subheader(f"{j['teams']['home']['name']} {j['goals']['home']} x {j['goals']['away']} {j['teams']['away']['name']}")
-                    st.write(f"Tempo de jogo: {j['fixture']['status']['elapsed']}'")
+                casa = j['teams']['home']['name']
+                fora = j['teams']['away']['name']
+                placar_casa = j['goals']['home']
+                placar_fora = j['goals']['away']
+                tempo = j['fixture']['status']['elapsed']
                 
-                with col2:
-                    # Botão para analisar jogadores desse jogo específico
-                    if st.button(f"Analisar Elenco", key=j['fixture']['id']):
-                        st.info("Buscando performance dos jogadores...")
-                        # Aqui chamamos a função de scouting que testamos no Colab
+                with st.expander(f"{casa} {placar_casa} x {placar_fora} {fora} ({tempo}')"):
+                    st.write(f"**Competição:** {j['league']['name']} - {j['league']['country']}")
+                    
+                    # Lógica simples de IA para pressão
+                    eventos = len(j.get('events', []))
+                    if eventos > 10:
+                        st.success("🔥 CHANCE ALTA DE GOL: Jogo muito movimentado!")
+                    elif eventos > 5:
+                        st.warning("⚠️ JOGO MORNO: Pouca pressão na área.")
+                    else:
+                        st.error("❄️ JOGO PARADO: Grande chance de Under (poucos gols).")
         else:
-            st.warning("Nenhum jogo do Brasileirão ao vivo agora.")
+            st.info("Nenhum jogo relevante acontecendo agora.")
 
 with aba_basq:
-    st.header("NBA Analytics")
-    st.info("Esta aba mostrará a probabilidade de Over/Under de pontos por jogador.")
-    # Adicionaremos a lógica de NBA aqui na próxima etapa
-  
+    st.header("NBA Stats")
+    st.write("Dica: Os jogos da NBA geralmente começam à noite!")
