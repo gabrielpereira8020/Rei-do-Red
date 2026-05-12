@@ -5,16 +5,15 @@ import requests
 API_KEY = st.secrets["API_KEY"]
 HEADERS = {'x-rapidapi-key': API_KEY}
 
-st.set_page_config(page_title="IA Pro Stats", page_icon="📈")
+st.set_page_config(page_title="IA Pro Stats", page_icon="💰", layout="wide")
 
-st.title("🚀 IA Esportiva: Analisador Pro")
+st.title("💰 IA Esportiva: Analisador Pro + Odds")
 
 aba_fut, aba_basq = st.tabs(["⚽ Futebol Ao Vivo", "🏀 Basquete (NBA)"])
 
 with aba_fut:
-    st.header("Análise de Pressão e Gols")
-    if st.button("Buscar Jogos no Mundo"):
-        # Agora busca TODOS os jogos ao vivo (live=all)
+    st.header("Análise de Valor em Tempo Real")
+    if st.button("Analisar Oportunidades"):
         url = "https://v3.football.api-sports.io/fixtures?live=all"
         res = requests.get(url, headers=HEADERS).json()
         
@@ -22,24 +21,33 @@ with aba_fut:
             for j in res['response']:
                 casa = j['teams']['home']['name']
                 fora = j['teams']['away']['name']
-                placar_casa = j['goals']['home']
-                placar_fora = j['goals']['away']
+                p_casa = j['goals']['home']
+                p_fora = j['goals']['away']
                 tempo = j['fixture']['status']['elapsed']
                 
-                with st.expander(f"{casa} {placar_casa} x {placar_fora} {fora} ({tempo}')"):
-                    st.write(f"**Competição:** {j['league']['name']} - {j['league']['country']}")
+                # Criando o card do jogo
+                with st.container():
+                    st.markdown(f"---")
+                    col1, col2 = st.columns([2, 1])
                     
-                    # Lógica simples de IA para pressão
-                    eventos = len(j.get('events', []))
-                    if eventos > 10:
-                        st.success("🔥 CHANCE ALTA DE GOL: Jogo muito movimentado!")
-                    elif eventos > 5:
-                        st.warning("⚠️ JOGO MORNO: Pouca pressão na área.")
-                    else:
-                        st.error("❄️ JOGO PARADO: Grande chance de Under (poucos gols).")
+                    with col1:
+                        st.subheader(f"{casa} {p_casa} x {p_fora} {fora}")
+                        st.caption(f"Liga: {j['league']['name']} ({tempo}')")
+                    
+                    with col2:
+                        # Lógica de Inteligência de Valor
+                        chutes_total = 0 # Simulação se não houver stats detalhadas
+                        if tempo > 70 and (p_casa + p_fora) == 0:
+                            st.error("🎯 Alerta: Under 0.5/1.5")
+                        elif tempo < 30 and (p_casa + p_fora) >= 2:
+                            st.success("🔥 Alerta: Over Gols!")
+                        else:
+                            st.info("⚖️ Jogo Equilibrado")
+
         else:
-            st.info("Nenhum jogo relevante acontecendo agora.")
+            st.info("Nenhum jogo ao vivo encontrado agora.")
 
 with aba_basq:
-    st.header("NBA Stats")
-    st.write("Dica: Os jogos da NBA geralmente começam à noite!")
+    st.header("NBA - Projeções")
+    st.write("Aguardando jogos da noite para análise de cestas.")
+    
