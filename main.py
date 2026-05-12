@@ -1,7 +1,13 @@
 import streamlit as st
 import requests
 
-API_KEY = st.secrets["API_KEY"]
+# Puxa a chave dos "Secrets" do Streamlit
+try:
+    API_KEY = st.secrets["API_KEY"]
+except:
+    st.error("Erro: API_KEY não encontrada nos Secrets do Streamlit.")
+    st.stop()
+
 HEADERS = {'x-rapidapi-key': API_KEY}
 
 st.set_page_config(page_title="IA Rei da Bola", page_icon="⚽", layout="wide")
@@ -9,58 +15,86 @@ st.set_page_config(page_title="IA Rei da Bola", page_icon="⚽", layout="wide")
 st.title("⚽ IA Rei da Bola: Analisador de Elite")
 st.markdown("---")
 
-if st.button("🚀 SCANEAR OPORTUNIDADES"):
+# Botão principal para rodar a análise
+if st.button("🚀 ESCANEAR OPORTUNIDADES AGORA"):
     url = "https://v3.football.api-sports.io/fixtures?live=all"
-    res = requests.get(url, headers=HEADERS).json()
     
-    if res.get('response'):
-        for j in res['response']:
-            tempo = j['fixture']['status']['elapsed'] if j['fixture']['status']['elapsed'] else 0
-            if tempo < 5: continue 
+    try:
+        res = requests.get(url, headers=HEADERS).json()
+        
+        if res.get('response'):
+            jogos_encontrados = 0
+            for j in res['response']:
+                # Puxa o tempo do jogo
+                tempo = j['fixture']['status']['elapsed'] if j['fixture']['status']['elapsed'] else 0
+                
+                # Só analisa jogos que já começaram (pelo menos 5 min)
+                if tempo < 5: continue 
+                
+                jogos_encontrados += 1
+                id_jogo = j['fixture']['id']
+                casa = j['teams']['home']['name']
+                fora = j['teams']['away']['name']
+                p_casa = j['goals']['home'] if j['goals']['home'] is not None else 0
+                p_fora = j['goals']['away'] if j['goals']['away'] is not None else 0
+                liga = j['league']['name']
+                
+                # BUSCA ESTATÍSTICAS DETALHADAS PARA CADA JOGO
+                url_stats = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={id_jogo}"
+                s_res = requests.get(url_stats, headers=HEADERS).json()
+                
+                no_alvo, fora_alvo, ataques_p, escanteios = 0, 0, 0, 0
+                
+                if s_res.get('response'):
+                    for s in s_res['response']:
+                        for stat in s['statistics']:
+                            if stat['type'] == 'Shots on Goal' and stat['value']: no_alvo += stat['value']
+                            if stat['type'] == 'Shots off Goal' and stat['value']: fora_alvo += stat['value']
+                            if stat['type'] == 'Dangerous Attacks' and stat['value']: ataques_p += stat['value']
+                            if stat['type'] == 'Corner Kicks' and stat['value']: escanteios += stat['value']
 
-            id_jogo = j['fixture']['id']
-            casa = j['teams']['home']['name']
-            fora = j['teams']['away']['name']
-            p_casa = j['goals']['home'] if j['goals']['home'] is not None else 0
-            p_fora = j['goals']['away'] if j['goals']['away'] is not None else 0
-            liga = j['league']['name']
+                # LÓGICA DE ÍNDICES SEPARADOS
+                # IG (Gols): Foco em pontaria (Chutes no Alvo)
+                ig = (no_alvo * 8) + (ataques_p / 5)
+                # IC (Cantos): Foco em volume (Chutes Totais)
+                ic = ((no_alvo + fora_alvo) * 3) + (ataques_p / 3)
+                
+                with st.container():
+                    c1, c2, c3 = st.columns([2, 2, 1])
+                    with c1:
+                        st.subheader(f"{casa} {p_casa} x {p_fora} {fora}")
+                        st.caption(f"🏆 {liga} • {tempo} min")
+                        st.write(f"🎯 No Alvo: {no_alvo} | 👟 Chutes Totais: {no_alvo + fora_alvo}")
+                        st.write(f"🚩 Escanteios Atuais: {escanteios}")
+                    
+                    with c2:
+                        # Mostra os alertas baseados nos índices
+                        if ig > 40: st.success(f"⚽ IG (GOLS): {ig:.1f} - ALTA PROBABILIDADE")
+                        if ic > 35: st.warning(f"🚩 IC (CANTOS): {ic:.1f} - PRESSÃO PARA CANTO")
+                        if ig <= 40 and ic <= 35: st.info(f"⚖️ Jogo em Estudo (IG: {ig:.1f} | IC: {ic:.1f})")
+                    
+                    with c3:
+                        # Veredito da IA para entradas
+                        if ic > 42 and tempo > 70:
+                            st.button("💰 ENTRAR: CANTOS", key=f"c_{id_jogo}")
+                        elif ig > 45 and tempo < 40:
+                            st.button("⚽ ENTRAR: GOL HT", key=f"h_{id_jogo}")
+                        else:
+                            st.button("👀 AGUARDAR", key=f"n_{id_jogo}")
+                    st.markdown("---")
             
-            # BUSCA ESTATÍSTICAS
-            url_stats = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={id_jogo}"
-            s_res = requests.get(url_stats, headers=HEADERS).json()
-            
-            no_alvo, fora_alvo, ataques_p, escanteios = 0, 0, 0, 0
-            if s_res.get('response'):
-                for s in s_res['response']:
-                    for stat in s['statistics']:
-                        if stat['type'] == 'Shots on Goal' and stat['value']: no_alvo += stat['value']
-                        if stat['type'] == 'Shots off Goal' and stat['value']: fora_alvo += stat['value']
-                        if stat['type'] == 'Dangerous Attacks' and stat['value']: ataques_p += stat['value']
-                        if stat['type'] == 'Corner Kicks' and stat['value']: escanteios += stat['value']
+            if jogos_encontrados == 0:
+                st.info("Muitos jogos em intervalo ou início. Aguarde mais alguns minutos.")
+                
+        else:
+            st.warning("A API não retornou jogos ao vivo no momento. Tente novamente em instantes.")
 
-            # LÓGICA DE ÍNDICES (A que você aprovou)
-            ig = (no_alvo * 8) + (ataques_p / 5)
-            ic = ((no_alvo + fora_alvo) * 3) + (ataques_p / 3)
-            
-            with st.container():
-                c1, c2, c3 = st.columns([2, 2, 1])
-                with c1:
-                    st.subheader(f"{casa} {p_casa} x {p_fora} {fora}")
-                    st.caption(f"🏆 {liga} • {tempo} min")
-                    st.write(f"🎯 No Alvo: {no_alvo} | 👟 Chutes Totais: {no_alvo + fora_alvo}")
-                    st.write(f"🚩 Escanteios: {escanteios}")
-                
-                with c2:
-                    if ig > 40: st.success(f"⚽ IG (GOLS): {ig:.1f}")
-                    if ic > 35: st.warning(f"🚩 IC (CANTOS): {ic:.1f}")
-                    if ig <= 40 and ic <= 35: st.info("⚖️ Jogo Neutro")
-                
-                with c3:
-                    if ic > 40 and tempo > 70:
-                        st.button("💰 PALPITE: CANTOS+", key=f"c_{id_jogo}")
-                    elif ig > 45 and tempo < 40:
-                        st.button("⚽ PALPITE: GOL HT", key=f"h_{id_jogo}")
-                    else:
-                        st.button("👀 AGUARDAR", key=f"n_{id_jogo}")
-                st.markdown("---")
-                
+    except Exception as e:
+        st.error(f"Erro na conexão: {e}")
+
+st.sidebar.title("🤖 Painel de Controle")
+st.sidebar.markdown("""
+**Legenda:**
+- **IG:** Índice de Gols (Calibrado por chutes no alvo)
+- **IC:** Índice de Cantos (Calibrado por chutes totais e pressão)
+""")
