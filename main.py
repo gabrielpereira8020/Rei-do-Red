@@ -1,59 +1,68 @@
 import streamlit as st
 import requests
+from streamlit_autorefresh import st_autorefresh
 
-# Chaves das duas fontes diferentes
+# 1. ATUALIZA O APP SOZINHO A CADA 5 MINUTOS
+st_autorefresh(interval=300000, key="bot_refresh")
+
+# Chaves (Certifique-se que estas 4 estão nos Secrets do Streamlit)
 API_KEY = st.secrets["API_KEY"]
 ODDS_API_KEY = st.secrets["ODDS_API_KEY"]
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+CHAT_ID = st.secrets["CHAT_ID"]
 
-st.set_page_config(page_title="IA Rei da Bola: Pro", page_icon="💰", layout="wide")
+def enviar_telegram(mensagem):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={CHAT_ID}&text={mensagem}"
+        requests.get(url)
+    except:
+        pass
 
-st.title("💰 IA Rei da Bola: Inteligência Dupla")
-st.sidebar.write("Fontes: API-Football + The-Odds-API")
+st.set_page_config(page_title="Sentinela Rei do Red", page_icon="🚨", layout="wide")
+st.title("🚨 Sentinela Rei do Red: Ativo")
+st.write("🔄 Monitorando jogos e enviando alertas para o Telegram...")
 
-if st.button("🔍 ESCANEAR MERCADO (DUPLA FONTE)"):
-    # FONTE 1: Estatísticas de Campo (API-Football)
-    url_stats = "https://v3.football.api-sports.io/fixtures?live=all"
-    res_stats = requests.get(url_stats, headers={'x-rapidapi-key': API_KEY}).json()
+# Busca de Dados ao Vivo
+url = "https://v3.football.api-sports.io/fixtures?live=all"
+res = requests.get(url, headers={'x-rapidapi-key': API_KEY}).json()
+
+if res.get('response'):
+    for j in res['response']:
+        tempo = j['fixture']['status']['elapsed'] or 0
+        if tempo < 10: continue
+
+        casa = j['teams']['home']['name']
+        fora = j['teams']['away']['name']
+        id_j = j['fixture']['id']
+
+        # Busca Estatísticas para calcular IG e IC
+        u_s = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={id_j}"
+        s_res = requests.get(u_s, headers={'x-rapidapi-key': API_KEY}).json()
+        
+        no_alvo, fora_alvo, ataques_p = 0, 0, 0
+        if s_res.get('response'):
+            for s in s_res['response']:
+                for stat in s['statistics']:
+                    if stat['type'] == 'Shots on Goal' and stat['value']: no_alvo += stat['value']
+                    if stat['type'] == 'Shots off Goal' and stat['value']: fora_alvo += stat['value']
+                    if stat['type'] == 'Dangerous Attacks' and stat['value']: ataques_p += stat['value']
+
+        # Cálculo dos Índices
+        ig = (no_alvo * 8) + (ataques_p / 5)
+        ic = ((no_alvo + fora_alvo) * 3) + (ataques_p / 3)
+
+        # Lógica de Alerta (Só envia se o jogo estiver "pegando fogo")
+        if ig > 50 or ic > 45:
+            tipo = "⚽ GOL" if ig > 50 else "🚩 CANTOS"
+            msg = f"🔥 ALERTA DE {tipo}!\n\n🏟️ {casa} x {fora}\n⏰ Tempo: {tempo}'\n🎯 IG: {ig:.1f} | IC: {ic:.1f}"
+            
+            # Evita repetir a mensagem no mesmo jogo
+            if f"sent_{id_j}" not in st.session_state:
+                enviar_telegram(msg)
+                st.session_state[f"sent_{id_j}"] = True
+                st.success(f"Alerta enviado: {casa} x {fora}")
+
+        st.write(f"✅ Monitorando: {casa} x {fora} ({tempo}') - IG: {ig:.1f}")
+else:
+    st.info("Nenhum jogo quente no momento. Próxima varredura em 5 min...")
     
-    # FONTE 2: Odds ao Vivo (The-Odds-API)
-    # Buscando odds de futebol para a região Europa/Brasil
-    url_odds = f"https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal"
-    res_odds = requests.get(url_odds).json()
-
-    if res_stats.get('response'):
-        for j in res_stats['response']:
-            tempo = j['fixture']['status']['elapsed'] if j['fixture']['status']['elapsed'] else 0
-            if tempo < 10: continue
-
-            casa = j['teams']['home']['name']
-            fora = j['teams']['away']['name']
-            p_casa = j['goals']['home'] or 0
-            p_fora = j['goals']['away'] or 0
-            
-            # Cruzamento de Dados: Tenta achar a Odd desse jogo na Fonte 2
-            odd_encontrada = "Buscando..."
-            if isinstance(res_odds, list):
-                for o in res_odds:
-                    if casa in o['home_team'] or fora in o['away_team']:
-                        # Pega a odd do primeiro bookmaker disponível (ex: Bet365/Betano)
-                        odd_encontrada = o['bookmakers'][0]['markets'][0]['outcomes']
-
-            # Lógica de análise (IG e IC)
-            # (Aqui mantemos aquele cálculo que você aprovou)
-            
-            with st.container():
-                c1, c2 = st.columns([2, 1])
-                with c1:
-                    st.subheader(f"{casa} {p_casa} x {p_fora} {fora}")
-                    st.caption(f"⏰ {tempo}' min | Fonte 1: Status OK")
-                with c2:
-                    if isinstance(odd_encontrada, list):
-                        st.info(f"📊 Odds: {odd_encontrada[0]['name']} @{odd_encontrada[0]['price']}")
-                    else:
-                        st.write("Odd em ajuste...")
-                st.markdown("---")
-    else:
-        st.warning("Aguardando entrada de dados das fontes...")
-
-st.sidebar.markdown("---")
-st.sidebar.caption("IA configurada para cruzar dados de campo com movimentação de mercado.")
