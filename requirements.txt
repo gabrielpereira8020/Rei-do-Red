@@ -1,7 +1,7 @@
 streamlit
 requests
 pandas
-streamlit-autorefresh
-supabase
-sportmonks
 google-generativeai
+supabase
+plotly
+streamlit-autorefresh
