@@ -296,6 +296,8 @@ st.sidebar.metric("📈 Winrate", f"{winrate}%")
 # HEADER
 # =====================================================
 
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 st.title("🏆 IA REI DA BOLA PRO")
 st.caption("Radar inteligente para traders esportivos")
 
