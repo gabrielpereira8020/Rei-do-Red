@@ -117,9 +117,6 @@ HEADERS = {
 @st.cache_data(ttl=60)
 def fetch_api(endpoint):
 
-    @st.cache_data(ttl=60)
-def fetch_api(endpoint):
-
     try:
 
         url = f"https://v3.football.api-sports.io/{endpoint}"
