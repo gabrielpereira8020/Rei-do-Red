@@ -117,6 +117,9 @@ HEADERS = {
 @st.cache_data(ttl=60)
 def fetch_api(endpoint):
 
+    @st.cache_data(ttl=60)
+def fetch_api(endpoint):
+
     try:
 
         url = f"https://v3.football.api-sports.io/{endpoint}"
@@ -134,6 +137,34 @@ def fetch_api(endpoint):
 
     except:
         return []
+
+# ==========================================
+# TELEGRAM
+# ==========================================
+
+def enviar_telegram(msg):
+
+    try:
+
+        url = (
+            f"https://api.telegram.org/bot"
+            f"{TELEGRAM_TOKEN}/sendMessage"
+        )
+
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": msg
+        }
+
+        requests.post(
+            url,
+            json=payload,
+            timeout=10
+        )
+
+    except:
+        pass
+
 
 # =====================================================
 # IA
