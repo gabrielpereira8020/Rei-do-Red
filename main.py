@@ -491,11 +491,7 @@ with aba3:
                 ),
                 use_container_width=True
             )
+            except Exception as e:
+    return f"Erro IA: {e}"
 
-        else:
-            st.info("Sem histórico")
-
-    except Exception as e:
-        st.error(f"Erro: {e}")
-
-st.write(analisar_com_ia("teste"))
+        
