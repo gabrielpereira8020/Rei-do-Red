@@ -2,114 +2,108 @@ import streamlit as st
 import requests
 import pandas as pd
 import google.generativeai as genai
-from supabase import create_client, Client
 from datetime import datetime
-import plotly.express as px
-from streamlit_autorefresh import st_autorefresh
 
 # --- CONFIGURAÇÕES ---
-st.set_page_config(page_title="IA Rei da Bola: Elite Pro", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="IA REI DA BOLA - ELITE PRO", page_icon="🏆", layout="wide")
 
-# Refresh a cada 5 minutos para economizar API
-st_autorefresh(interval=300000, key="global_refresh")
+# Lista de IDs das principais ligas (Atualizada com Arábia e EUA)
+LIGAS_ELITE = [
+    71, 72, 73, # Brasil A, B, C
+    39, 40,    # Inglaterra 1 e 2
+    140, 141,  # Espanha 1 e 2
+    78, 79,    # Alemanha 1 e 2
+    135, 136,  # Itália 1 e 2
+    61, 62,    # França 1 e 2
+    94,        # Portugal
+    307,       # Arábia Saudita (Saudi Pro League)
+    253,       # Estados Unidos (MLS)
+    2, 3, 5, 848, # Champions, Europa League, Libertadores, Sul-Americana
+    13,        # Copa do Brasil
+]
 
 # --- INICIALIZAÇÃO ---
 @st.cache_resource
-def init_supabase() -> Client:
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-
 def init_gemini():
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     return genai.GenerativeModel('gemini-1.5-flash')
 
-supabase = init_supabase()
 gemini = init_gemini()
+API_KEY = st.secrets["API_KEY"]
+HEADERS = {'x-rapidapi-key': API_KEY}
 
-class FootballData:
-    def __init__(self):
-        self.headers = {'x-rapidapi-key': st.secrets["API_KEY"]}
+def get_data(endpoint):
+    url = f"https://v3.football.api-sports.io/{endpoint}"
+    try:
+        res = requests.get(url, headers=HEADERS).json()
+        return res.get('response', [])
+    except:
+        return []
 
-    @st.cache_data(ttl=300) # Cache de 5 min
-    def get_live_fixtures(_self):
-        url = "https://v3.football.api-sports.io/fixtures?live=all"
-        return requests.get(url, headers=_self.headers).json().get('response', [])
-
-    @st.cache_data(ttl=600) # Cache de 10 min
-    def get_match_stats(_self, fixture_id):
-        url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fixture_id}"
-        return requests.get(url, headers=_self.headers).json().get('response', [])
-
-    @st.cache_data(ttl=3600) # Cache de 1 hora
-    def get_pre_match(_self, date_str):
-        url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
-        return requests.get(url, headers=_self.headers).json().get('response', [])
-
-    def get_h2h(self, id1, id2):
-        # Chamada direta sem cache para ser usada apenas sob demanda
-        url = f"https://v3.football.api-sports.io/fixtures/headtohead?h2h={id1}-{id2}"
-        res = requests.get(url, headers=self.headers).json().get('response', [])
-        return res[:5]
-
-# --- FUNÇÕES ---
-def gerar_analise_ia(contexto):
-    prompt = f"Analise como Trader Sênior: {contexto}. Veredito direto com confiança 0-100%."
+def analisar_ia(ctx):
+    prompt = f"Trader Profissional: Analise {ctx}. Dê veredito ENTRAR/AGUARDAR e confiança %."
     try: return gemini.generate_content(prompt).text
-    except: return "🤖 IA em manutenção..."
-
-def db_salvar(jogo, ig, resultado):
-    try: supabase.table("historico").insert({"data": datetime.now().isoformat(), "jogo": jogo, "ig": ig, "resultado": resultado}).execute()
-    except: pass
+    except: return "IA processando..."
 
 # --- UI ---
-st.title("⚡ IA REI DA BOLA: SISTEMA DE ELITE")
-fd = FootballData()
+st.title("🏆 IA REI DA BOLA - MODO ELITE PRO")
+st.sidebar.success("✅ Plano PRO: Ligas de Elite + Arábia/EUA")
 
-tab_live, tab_pre, tab_db = st.tabs(["🎯 LIVE RADAR", "🔮 PRÉ-JOGO EXPERT", "📈 PERFORMANCE"])
+tab_radar, tab_pre = st.tabs(["🎯 RADAR LIVE (ELITE)", "🔮 PRÉ-JOGO DOSSIÊ"])
 
-# --- LIVE ---
-with tab_live:
-    live = fd.get_live_fixtures()
-    if not live: st.info("Buscando oportunidades...")
+# --- TAB 1: RADAR AO VIVO ---
+with tab_radar:
+    live = get_data("fixtures?live=all")
+    live_elite = [j for j in live if j['league']['id'] in LIGAS_ELITE]
+    
+    if not live_elite:
+        st.info("Aguardando jogos das ligas selecionadas...")
     else:
-        for f in live:
+        for f in live_elite:
             fid = f['fixture']['id']
-            casa, fora = f['teams']['home']['name'], f['teams']['away']['name']
-            s = fd.get_stats(fid)
-            # Lógica de cálculo simplificada para economizar processamento
-            no_alvo = sum([item['value'] or 0 for team in s for item in team['statistics'] if "Shots on Goal" in item['type']]) if s else 0
-            atq_p = sum([item['value'] or 0 for team in s for item in team['statistics'] if "Dangerous Attacks" in item['type']]) if s else 0
-            ig = (no_alvo * 6) + (atq_p * 0.35)
+            h, a = f['teams']['home']['name'], f['teams']['away']['name']
+            placar = f"{f['goals']['home']}-{f['goals']['away']}"
+            tempo = f['fixture']['status']['elapsed']
+            liga_nome = f['league']['name']
             
-            if ig > 20:
-                with st.expander(f"🏟️ {casa} vs {fora} | IG: {ig:.1f}"):
-                    if st.button("🧠 Consultar Gemini", key=f"l_{fid}"):
-                        st.info(gerar_analise_ia(f"{casa}x{fora}, IG:{ig:.1f}"))
-                    if st.button("✅ GREEN", key=f"g_{fid}"):
-                        db_salvar(f"{casa}x{fora}", ig, "✅ GREEN")
-                        st.rerun()
+            # Puxa Stats detalhadas
+            s = get_data(f"fixtures/statistics?fixture={fid}")
+            ig = 0
+            if s:
+                try:
+                    # Cálculo do IG Pro: Foca em Ataques Perigosos e Chutes no Alvo
+                    stats_h = {st['type']: st['value'] for st in s[0]['statistics']}
+                    stats_a = {st['type']: st['value'] for st in s[1]['statistics']}
+                    
+                    atq_p = (stats_h.get('Dangerous Attacks', 0) or 0) + (stats_a.get('Dangerous Attacks', 0) or 0)
+                    chutes = (stats_h.get('Shots on Goal', 0) or 0) + (stats_a.get('Shots on Goal', 0) or 0)
+                    
+                    ig = (atq_p * 0.5) + (chutes * 5)
+                except: ig = 0
 
-# --- PRÉ-JOGO (DESTRAVADO) ---
+            color = "white"
+            if ig > 25: color = "#ff4b4b" # Alerta vermelho para pressão alta
+            
+            with st.expander(f"⚽ {tempo}' | {h} {placar} {a} | IG: {ig:.1f}"):
+                st.markdown(f"**Liga:** {liga_nome}")
+                st.write(f"Pressão Total: {ig:.1f}")
+                if st.button(f"Análise Especializada", key=f"live_{fid}"):
+                    ctx_ia = f"{h}x{a}, Liga {liga_nome}, IG:{ig:.1f}, {tempo}min, {placar}"
+                    st.info(analisar_ia(ctx_ia))
+
+# --- TAB 2: PRÉ-JOGO ---
 with tab_pre:
     hoje = datetime.now().strftime("%Y-%m-%d")
-    pre = fd.get_pre_match(hoje)
-    if pre:
-        # Filtra jogos que ainda não começaram
-        futuros = [j for j in pre if j['fixture']['status']['short'] == "NS"]
-        for pf in futuros[:30]:
-            fid_p = pf['fixture']['id']
-            c, f_n = pf['teams']['home']['name'], pf['teams']['away']['name']
-            with st.expander(f"📅 {pf['fixture']['date'][11:16]} | {c} x {f_n}"):
-                if st.button(f"🔍 Dossiê de Elite", key=f"p_{fid_p}"):
-                    with st.spinner("IA cruzando H2H..."):
-                        # Busca H2H apenas no clique do botão para economizar API
-                        h = fd.get_h2h(pf['teams']['home']['id'], pf['teams']['away']['id'])
-                        h_txt = ", ".join([f"{m['goals']['home']}x{m['goals']['away']}" for m in h])
-                        st.markdown(gerar_analise_ia(f"Pré-jogo: {c}x{f_n}. H2H recente: {h_txt}"))
-    else: st.error("Limite da API atingido ou sem jogos disponíveis.")
-
-# --- HISTÓRICO ---
-with tab_db:
-    try:
-        res = supabase.table("historico").select("*").execute()
-        if res.data: st.dataframe(pd.DataFrame(res.data).sort_values(by='data', ascending=False))
-    except: st.error("Erro no banco.")
+    pre_fixtures = get_data(f"fixtures?date={hoje}")
+    pre_elite = [j for j in pre_fixtures if j['league']['id'] in LIGAS_ELITE and j['fixture']['status']['short'] == "NS"]
+    
+    if pre_elite:
+        for p in pre_elite[:25]:
+            h_p, a_p = p['teams']['home']['name'], p['teams']['away']['name']
+            hora = p['fixture']['date'][11:16]
+            with st.expander(f"📅 {hora} | {h_p} x {a_p}"):
+                st.write(f"🏆 {p['league']['name']}")
+                if st.button("Gerar Análise Pré-Jogo", key=f"pre_{p['fixture']['id']}"):
+                    h2h = get_data(f"fixtures/headtohead?h2h={p['teams']['home']['id']}-{p['teams']['away']['id']}")
+                    resumos = [f"{m['goals']['home']}x{m['goals']['away']}" for m in h2h[:3]]
+                    st.markdown(analisar_ia(f"Análise Pré-Jogo: {h_p}x{a_p}. H2H: {resumos}"))
