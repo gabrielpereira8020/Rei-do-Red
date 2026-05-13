@@ -4,10 +4,10 @@ import pandas as pd
 import google.generativeai as genai
 from supabase import create_client, Client
 from datetime import datetime, timedelta
-import plotly.express as px # Para gráficos de performance
+import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
 
-# --- CONFIGURAÇÕES DE INTERFACE ---
+# --- 1. CONFIGURAÇÕES DE INTERFACE ---
 st.set_page_config(
     page_title="IA Rei da Bola: Ultimate Pro",
     page_icon="⚽",
@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo CSS Customizado para parecer um Terminal de Trading
+# Estilo Dark Mode Profissional
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
@@ -24,207 +24,185 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO DE SERVIÇOS ---
+# Auto-refresh do Radar a cada 2 minutos
+st_autorefresh(interval=120000, key="global_refresh")
 
+# --- 2. INICIALIZAÇÃO DE SERVIÇOS (7 CHAVES) ---
 @st.cache_resource
 def init_supabase() -> Client:
+    # Usa chaves: SUPABASE_URL e SUPABASE_KEY
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 def init_gemini():
+    # Usa chave: GEMINI_API_KEY
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     return genai.GenerativeModel('gemini-1.5-flash')
 
 supabase = init_supabase()
 gemini = init_gemini()
-st_autorefresh(interval=120000, key="global_refresh")
 
-# --- CORE LOGIC: API WRAPPERS ---
-
+# --- 3. CLASSE DE DADOS (API-FOOTBALL + SPORTMONKS) ---
 class FootballData:
     def __init__(self):
-        self.api_key = st.secrets["API_KEY"]
-        self.sm_key = st.secrets["SPORTMONKS_KEY"]
-        self.headers = {'x-rapidapi-key': self.api_key}
+        # Usa chaves: API_KEY e SPORTMONKS_KEY
+        self.headers = {'x-rapidapi-key': st.secrets["API_KEY"]}
+        self.sm_token = st.secrets["SPORTMONKS_KEY"]
 
     @st.cache_data(ttl=120)
-    def get_live_fixtures(_self):
+    def get_live(_self):
         url = "https://v3.football.api-sports.io/fixtures?live=all"
         return requests.get(url, headers=_self.headers).json().get('response', [])
 
     @st.cache_data(ttl=60)
-    def get_match_stats(_self, fixture_id):
-        url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fixture_id}"
+    def get_stats(_self, fid):
+        url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fid}"
         return requests.get(url, headers=_self.headers).json().get('response', [])
 
     @st.cache_data(ttl=3600)
-    def get_h2h(_self, id1, id2):
-        url = f"https://v3.football.api-sports.io/fixtures/headtohead?h2h={id1}-{id2}"
-        res = requests.get(url, headers=_self.headers).json().get('response', [])
-        return res[:5] # Últimos 5 jogos
+    def get_pre_match(_self, date_str):
+        url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
+        return requests.get(url, headers=_self.headers).json().get('response', [])
 
-    def get_injuries(self, team_id):
-        # Integração com Sportmonks para lesões
-        try:
-            url = f"https://api.sportmonks.com/v3/football/injuries/teams/{team_id}?api_token={self.sm_key}"
-            res = requests.get(url).json().get('data', [])
-            return res
-        except: return []
-
-# --- CORE LOGIC: IA ANALYST ---
-
+# --- 4. FUNÇÕES DE SUPORTE ---
 def gerar_analise_ia(contexto, tipo="live"):
     prompt = f"""
-    Aja como um Senior Football Analyst & Professional Bettor.
-    CONTEXTO: {contexto}
-    TIPO DE ANÁLISE: {tipo.upper()}
-    
-    TAREFA:
-    1. Avalie se a pressão estatística condiz com o momento do jogo.
-    2. Identifique anomalias (ex: muito IG mas poucos chutes reais).
-    3. Dê uma recomendação de entrada (Back, Lay, Over, Under ou Cantos).
-    4. Atribua um índice de confiança de 0 a 100%.
-    
-    Seja cético. Se o jogo estiver 'morno', diga para não entrar.
+    Aja como um Trader Esportivo Sênior. 
+    Contexto do Jogo: {contexto}
+    Tipo de Análise: {tipo.upper()}
+    Dê um veredito direto: Vale a entrada? Qual o risco? Confiança de 0-100%.
     """
     try:
-        response = gemini.generate_content(prompt)
-        return response.text
-    except: return "🤖 IA temporariamente indisponível."
+        return gemini.generate_content(prompt).text
+    except:
+        return "⚠️ O cérebro da IA está pensando... tente em instantes."
 
-# --- DATABASE OPS ---
-
-def db_salvar_entrada(jogo, ig, resultado, mercado, lucro=0):
-    supabase.table("historico").insert({
-        "data": datetime.now().isoformat(),
-        "jogo": jogo,
-        "ig": ig,
-        "resultado": resultado,
-        "mercado": mercado,
-        "lucro": lucro
-    }).execute()
-
-# --- INTERFACE: SIDEBAR (STATS GERAIS) ---
-
-with st.sidebar:
-    st.header("📊 Global Performance")
+def salvar_no_db(jogo, ig, resultado, mercado):
+    # Salva no histórico do Supabase
     try:
-        res = supabase.table("historico").select("*").execute()
-        df_stats = pd.DataFrame(res.data)
-        if not df_stats.empty:
-            greens = len(df_stats[df_stats['resultado'].str.contains("GREEN")])
-            reds = len(df_stats[df_stats['resultado'].str.contains("RED")])
-            st.metric("Win Rate", f"{(greens/(greens+reds)*100):.1f}%")
-            st.metric("Total de Entradas", len(df_stats))
-    except: st.write("Aguardando primeiras entradas...")
+        supabase.table("historico").insert({
+            "data": datetime.now().isoformat(),
+            "jogo": jogo, 
+            "ig": ig, 
+            "resultado": resultado, 
+            "mercado": mercado
+        }).execute()
+    except:
+        st.error("Erro ao salvar no banco de dados.")
 
-# --- INTERFACE: MAIN TABS ---
-
-tab_live, tab_pre, tab_db = st.tabs(["🔥 LIVE RADAR", "🔮 PRE-MATCH AI", "📈 HISTORY & ANALYTICS"])
+# --- 5. INTERFACE PRINCIPAL ---
+st.title("⚡ IA REI DA BOLA PRO")
 fd = FootballData()
 
-# --- TAB 1: AO VIVO ---
+# Sidebar: Performance e Alertas (Usa TELEGRAM_TOKEN e CHAT_ID se necessário)
+with st.sidebar:
+    st.header("📊 Performance Real")
+    try:
+        data = supabase.table("historico").select("*").execute()
+        df_side = pd.DataFrame(data.data)
+        if not df_side.empty:
+            greens = len(df_side[df_side['resultado'].str.contains("GREEN")])
+            reds = len(df_side[df_side['resultado'].str.contains("RED")])
+            total = greens + reds
+            acc = (greens / total * 100) if total > 0 else 0
+            st.metric("Assertividade", f"{acc:.1f}%")
+            st.write(f"✅ {greens} Greens | ❌ {reds} Reds")
+    except:
+        st.write("Sem dados para exibir.")
+
+tab_live, tab_pre, tab_db = st.tabs(["🎯 RADAR AO VIVO", "🔮 ANÁLISE PRÉ-JOGO", "📈 HISTÓRICO"])
+
+# --- ABA 1: AO VIVO ---
 with tab_live:
-    fixtures = fd.get_live_fixtures()
-    if not fixtures:
-        st.info("Nenhum jogo relevante ao vivo agora.")
+    live_fixtures = fd.get_live()
+    if not live_fixtures:
+        st.info("Nenhum jogo com volume estatístico no momento.")
     else:
-        for f in fixtures:
-            id_j = f['fixture']['id']
-            casa = f['teams']['home']['name']
-            fora = f['teams']['away']['name']
+        for f in live_fixtures:
+            fid = f['fixture']['id']
+            casa, fora = f['teams']['home']['name'], f['teams']['away']['name']
             placar = f"{f['goals']['home']}x{f['goals']['away']}"
-            tempo = f['fixture']['status']['elapsed']
+            tempo = f['fixture']['status']['elapsed'] or 0
             
-            # Cálculo de Pressão Real
-            stats = fd.get_match_stats(id_j)
-            no_alvo, fora_alvo, ataques_p, escanteios = 0, 0, 0, 0
+            # Busca Estatísticas Detalhadas
+            s_data = fd.get_stats(fid)
+            no_alvo, f_alvo, ataques_p, cantos = 0, 0, 0, 0
+            if s_data:
+                for team_stats in s_data:
+                    for s in team_stats['statistics']:
+                        v = s['value'] or 0
+                        t = s['type']
+                        if "Shots on Goal" in t: no_alvo += v
+                        if "Shots off Goal" in t: f_alvo += v
+                        if "Dangerous Attacks" in t: ataques_p += v
+                        if "Corner Kicks" in t: cantos += v
+
+            # Cálculo de Índices Rei da Bola
+            ig = (no_alvo * 6) + (ataques_p * 0.35) + (cantos * 2)
             
-            if stats:
-                for s in stats:
-                    for item in s['statistics']:
-                        val = item['value'] or 0
-                        t = item['type']
-                        if "Shots on Goal" in t: no_alvo += val
-                        if "Shots off Goal" in t: fora_alvo += val
-                        if "Dangerous Attacks" in t: ataques_p += val
-                        if "Corner Kicks" in t: escanteios += val
-
-            # Fórmulas de Elite
-            ig = (no_alvo * 6) + (ataques_p * 0.35) + (escanteios * 2)
-            ic = ((no_alvo + fora_alvo) * 3) + (ataques_p * 0.45)
-
-            if ig > 20 or ic > 25:
+            # Filtro de Exibição (Só jogos interessantes)
+            if ig > 20:
                 with st.expander(f"🏟️ {casa} {placar} {fora} ({tempo}') | IG: {ig:.1f}"):
-                    c1, c2, c3 = st.columns([1, 1, 2])
-                    with c1:
-                        st.write("**Estatísticas Brutas**")
-                        st.write(f"🎯 Alvo: {no_alvo}")
+                    col_info, col_ai = st.columns([1, 1.5])
+                    with col_info:
+                        st.write(f"🎯 No Alvo: {no_alvo}")
                         st.write(f"🧨 Atq. Perigosos: {ataques_p}")
-                        st.write(f"🚩 Cantos: {escanteios}")
-                    with c2:
-                        st.write("**Índices de Pressão**")
-                        st.metric("Índice Gols", f"{ig:.1f}")
-                        st.metric("Índice Cantos", f"{ic:.1f}")
-                    with c3:
-                        if st.button(f"🧠 Gemini Master Analysis", key=f"gem_{id_j}"):
-                            with st.spinner("IA processando comportamento tático..."):
-                                ctx = f"{casa}x{fora}, {tempo}min, Placar: {placar}, IG:{ig}, Cantos:{escanteios}"
-                                st.info(gerar_analise_ia(ctx))
-
+                        st.write(f"🚩 Escanteios: {cantos}")
+                    
+                    with col_ai:
+                        if st.button(f"🧠 Consultar Gemini", key=f"ai_live_{fid}"):
+                            with st.spinner("Analisando pressão tática..."):
+                                res = gerar_analise_ia(f"{casa}x{fora}, {tempo}min, Placar: {placar}, IG:{ig:.1f}")
+                                st.info(res)
+                    
                     st.divider()
-                    cb1, cb2, cb3 = st.columns(3)
-                    if cb1.button("✅ GREEN", key=f"win_{id_j}"):
-                        db_salvar_entrada(f"{casa}x{fora}", ig, "✅ GREEN", "Live")
+                    b1, b2 = st.columns(2)
+                    if b1.button("✅ REGISTRAR GREEN", key=f"win_{fid}"):
+                        salvar_no_db(f"{casa}x{fora}", ig, "✅ GREEN", "Live")
+                        st.success("Salvo!")
                         st.rerun()
-                    if cb2.button("❌ RED", key=f"red_{id_j}"):
-                        db_salvar_entrada(f"{casa}x{fora}", ig, "❌ RED", "Live")
+                    if b2.button("❌ REGISTRAR RED", key=f"loss_{fid}"):
+                        salvar_no_db(f"{casa}x{fora}", ig, "❌ RED", "Live")
+                        st.error("Salvo.")
                         st.rerun()
 
-# --- TAB 2: PRÉ-JOGO ---
-tab_pre:
-    st.subheader("🔮 Prognósticos IA para as próximas 24h")
-    # Busca jogos de amanhã
-    amanha = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-    url_pre = f"https://v3.football.api-sports.io/fixtures?date={amanha}"
-    pre_fixtures = requests.get(url_pre, headers=fd.headers).json().get('response', [])
+# --- ABA 2: PRÉ-JOGO ---
+with tab_pre:
+    st.subheader("🔮 Prognósticos para as próximas 24h")
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    pre_fixtures = fd.get_pre_match(hoje)
     
-    # Filtro de Ligas Principais (Brasil, Euro, Libertadores)
-    ligas_permitidas = [13, 71, 39, 140, 135, 78, 61]
-    
-    for pf in pre_fixtures:
-        if pf['league']['id'] in ligas_permitidas:
+    if pre_fixtures:
+        # Mostra os 30 primeiros jogos do dia
+        for pf in pre_fixtures[:30]:
             id_pf = pf['fixture']['id']
-            t_casa = pf['teams']['home']
-            t_fora = pf['teams']['away']
+            c_name, f_name = pf['teams']['home']['name'], pf['teams']['away']['name']
+            liga = pf['league']['name']
+            hora = pf['fixture']['date'][11:16]
             
-            with st.expander(f"📅 {pf['fixture']['date'][11:16]} | {pf['league']['name']}: {t_casa['name']} vs {t_fora['name']}"):
-                col_pre1, col_pre2 = st.columns([1, 1])
-                
-                if st.button(f"🔍 Gerar Dossiê Completo", key=f"dossie_{id_pf}"):
-                    with st.spinner("Cruzando H2H e Dados Históricos..."):
-                        h2h = fd.get_h2h(t_casa['id'], t_fora['id'])
-                        h2h_str = "\n".join([f"{m['fixture']['date'][:10]}: {m['goals']['home']}x{m['goals']['away']}" for m in h2h])
-                        
-                        ctx_pre = f"""
-                        Jogo: {t_casa['name']} x {t_fora['name']}
-                        Liga: {pf['league']['name']}
-                        H2H Recente: {h2h_str}
-                        """
-                        analise_pre = gerar_analise_ia(ctx_pre, tipo="pre-jogo")
-                        st.markdown(f"### 🤖 Parecer Especialista:\n{analise_pre}
-
-# --- TAB 3: PERFORMANCE & ANALYTICS ---
-with tab_db:
-    st.subheader("📈 Gestão de Banca e Performance")
-    res_db = supabase.table("historico").select("*").execute()
-    if res_db.data:
-        df_final = pd.DataFrame(res_db.data)
-        
-        # Gráfico de Evolução (Exemplo simples)
-        df_final['data'] = pd.to_datetime(df_final['data'])
-        fig = px.line(df_final, x="data", y="ig", title="Oscilação de IG das Entradas", template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.dataframe(df_final.sort_values(by='data', ascending=False), use_container_width=True)
+            with st.expander(f"📅 {hora} | {liga}: {c_name} x {f_name}"):
+                if st.button(f"🔍 Gerar Dossiê de Valor", key=f"pre_ia_{id_pf}"):
+                    with st.spinner("IA estudando o confronto..."):
+                        analise_pre = gerar_analise_ia(f"Pré-jogo: {c_name} x {f_name} ({liga})", tipo="pre-jogo")
+                        st.markdown(f"### 🤖 Parecer da IA:\n{analise_pre}")
     else:
-        st.info("Nenhuma entrada registrada no histórico.")
+        st.warning("Não foi possível carregar a lista de jogos para hoje.")
+
+# --- ABA 3: HISTÓRICO ---
+with tab_db:
+    st.subheader("📈 Gestão de Performance")
+    try:
+        res_db = supabase.table("historico").select("*").execute()
+        if res_db.data:
+            df_hist = pd.DataFrame(res_db.data)
+            df_hist = df_hist.sort_values(by='data', ascending=False)
+            
+            # Gráfico de Resultados
+            fig = px.pie(df_hist, names="resultado", title="Distribuição de Resultados", 
+                         color="resultado", color_discrete_map={"✅ GREEN": "#2ecc71", "❌ RED": "#e74c3c"})
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.dataframe(df_hist[["data", "jogo", "ig", "mercado", "resultado"]], use_container_width=True)
+        else:
+            st.info("O banco de dados ainda está vazio. Registre entradas no Radar Live!")
+    except:
+        st.error("Erro ao conectar com o Supabase. Verifique suas chaves URL e KEY.")
