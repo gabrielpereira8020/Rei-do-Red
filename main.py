@@ -181,7 +181,7 @@ with tab_live:
                         st.rerun()
 
 # --- TAB 2: PRÉ-JOGO ---
-with tab_pre:
+tab_pre:
     st.subheader("🔮 Prognósticos IA para as próximas 24h")
     # Busca jogos de amanhã
     amanha = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -211,7 +211,7 @@ with tab_pre:
                         H2H Recente: {h2h_str}
                         """
                         analise_pre = gerar_analise_ia(ctx_pre, tipo="pre-jogo")
-                        st.markdown(f"### 🤖 Parecer Especialista:\n{analise_pre}")
+                        st.markdown(f"### 🤖 Parecer Especialista:\n{analise_pre}
 
 # --- TAB 3: PERFORMANCE & ANALYTICS ---
 with tab_db:
