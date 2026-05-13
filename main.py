@@ -2,113 +2,153 @@ import streamlit as st
 import requests
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
+from supabase import create_client, Client
+from datetime import datetime
 
+# 🔄 Auto-refresh a cada 3 min
 st_autorefresh(interval=180000, key="bot_refresh")
 
+# --- CONFIGURAÇÃO DO SUPABASE ---
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = init_supabase()
+
+# --- FUNÇÕES DO BANCO DE DADOS (Supabase) ---
+def salvar_entrada(jogo, ig, resultado, mercado):
+    data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+    supabase.table("historico").insert({
+        "data": data_atual,
+        "jogo": jogo,
+        "ig": ig,
+        "resultado": resultado,
+        "mercado": mercado
+    }).execute()
+
+def carregar_historico():
+    res = supabase.table("historico").select("*").order("id", desc=True).execute()
+    if res.data:
+        return pd.DataFrame(res.data)[["data", "jogo", "ig", "mercado", "resultado"]]
+    return pd.DataFrame(columns=["data", "jogo", "ig", "mercado", "resultado"])
+
+def limpar_historico():
+    supabase.table("historico").delete().neq("id", 0).execute()
+
+# --- TELEGRAM ---
+def enviar_telegram(mensagem):
+    token = st.secrets["TELEGRAM_TOKEN"]
+    chat_id = st.secrets["CHAT_ID"]
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    requests.post(url, data={"chat_id": chat_id, "text": mensagem, "parse_mode": "HTML"})
+
+# --- CACHE DE ESTATÍSTICAS ---
+@st.cache_data(ttl=120)
+def buscar_stats(id_jogo, api_key):
+    url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={id_jogo}"
+    res = requests.get(url, headers={'x-rapidapi-key': api_key}).json()
+    return res
+
+@st.cache_data(ttl=120)
+def buscar_jogos_ao_vivo(api_key):
+    url = "https://v3.football.api-sports.io/fixtures?live=all"
+    res = requests.get(url, headers={'x-rapidapi-key': api_key}).json()
+    return res
+
+# --- CHAVES ---
 API_KEY = st.secrets["API_KEY"]
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 CHAT_ID = st.secrets["CHAT_ID"]
 
-if 'greens' not in st.session_state: st.session_state.greens = 0
-if 'reds' not in st.session_state: st.session_state.reds = 0
-if 'historico' not in st.session_state: st.session_state.historico = []
+# --- INTERFACE ---
+st.set_page_config(page_title="IA Rei da Bola Pro", layout="wide")
+st.title("⚽ IA Rei da Bola + Supabase")
 
-def enviar_telegram(msg):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={CHAT_ID}&text={msg}"
-        requests.get(url)
-    except: pass
+df_hist = carregar_historico()
+greens = len(df_hist[df_hist['resultado'] == '✅ GREEN'])
+reds = len(df_hist[df_hist['resultado'] == '❌ RED'])
+total = greens + reds
+acc = (greens / total * 100) if total > 0 else 0
 
-st.set_page_config(page_title="IA Rei da Bola: Analista Pro", layout="wide")
-
-st.title("💰 IA Rei da Bola: Analista Pro")
 c1, c2, c3 = st.columns(3)
-c1.metric("✅ Greens", st.session_state.greens)
-c2.metric("❌ Reds", st.session_state.reds)
-total = st.session_state.greens + st.session_state.reds
-acc = (st.session_state.greens / total * 100) if total > 0 else 0
+c1.metric("✅ Greens", greens)
+c2.metric("❌ Reds", reds)
 c3.metric("📈 Assertividade", f"{acc:.1f}%")
 
-tab1, tab2 = st.tabs(["🎯 ANÁLISE DETALHADA", "📚 MEU HISTÓRICO"])
+tab1, tab2 = st.tabs(["🎯 AO VIVO", "🗄️ HISTÓRICO"])
 
 with tab1:
-    url_live = "https://v3.football.api-sports.io/fixtures?live=all"
-    res = requests.get(url_live, headers={'x-rapidapi-key': API_KEY}).json()
+    res = buscar_jogos_ao_vivo(API_KEY)
 
     if res.get('response'):
+        alertas_enviados = st.session_state.get("alertas_enviados", set())
+
         for j in res['response']:
             tempo = j['fixture']['status']['elapsed'] or 0
-            if tempo < 1: continue 
+            if tempo < 1:
+                continue
 
             casa = j['teams']['home']['name']
             fora = j['teams']['away']['name']
-            id_jogo = j['fixture']['id']
-            placar = f"{j['goals']['home']}x{j['goals']['away']}"
+            id_j = j['fixture']['id']
 
-            u_s = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={id_jogo}"
-            s_res = requests.get(u_s, headers={'x-rapidapi-key': API_KEY}).json()
-            
-            no_alvo, fora_alvo, ataques_p, escanteios = 0, 0, 0, 0
-            
+            s_res = buscar_stats(id_j, API_KEY)
+
+            no_alvo, fora_alvo, ataques_p = 0, 0, 0
             if s_res.get('response'):
                 for s in s_res['response']:
                     for stat in s['statistics']:
                         tipo = stat['type']
                         val = stat['value'] if stat['value'] else 0
-                        
-                        # Captura flexível de chutes
-                        if "Shots on Goal" in tipo: no_alvo += val
-                        if "Shots off Goal" in tipo: fora_alvo += val
-                        
-                        # Captura flexível de ataques (Resolve o problema do ZERO)
-                        if "Attacks" in tipo: # Pega "Attacks" e "Dangerous Attacks"
-                            if val > ataques_p: ataques_p = val
-                            
-                        if "Corner Kicks" in tipo: escanteios += val
+                        if "Shots on Goal" in tipo:
+                            no_alvo += val
+                        if "Shots off Goal" in tipo:
+                            fora_alvo += val
+                        if "Attacks" in tipo:
+                            if val > ataques_p:
+                                ataques_p = val
 
-            # Recalcula IG e IC com os dados corrigidos
-            ig = (no_alvo * 8) + (ataques_p / 5)
-            ic = ((no_alvo + fora_alvo) * 3) + (ataques_p / 3)
+            ig = (no_alvo * 6) + (ataques_p * 0.3)
+            ic = ((no_alvo + fora_alvo) * 2.5) + (ataques_p * 0.4)
 
-            if ig > 15 or ic > 15:
-                with st.expander(f"🏟️ {casa} {placar} {fora} ({tempo}')"):
-                    col_info1, col_info2, col_info3 = st.columns(3)
-                    with col_info1:
-                        st.write(f"🎯 **No Alvo:** {no_alvo}")
-                        st.write(f"🥅 **Para Fora:** {fora_alvo}")
-                    with col_info2:
-                        st.write(f"🧨 **Ataques:** {ataques_p}")
-                        st.write(f"🚩 **Escanteios:** {escanteios}")
-                    with col_info3:
-                        st.write(f"📈 **IG:** {ig:.1f}")
-                        st.write(f"📐 **IC:** {ic:.1f}")
+            if ig > 25 or ic > 30:
+                mercado = "Gols" if ig > ic else "Cantos"
+                indice = ig if mercado == "Gols" else ic
 
-                    sugestao = ""
-                    if ig >= 50:
-                        st.success("🔥 **SUGESTÃO: PRÓXIMO GOL**")
-                        sugestao = "⚽ Próximo Gol"
-                    elif ic >= 45:
-                        st.info("🚩 **SUGESTÃO: PRÓXIMO CANTO**")
-                        sugestao = "🚩 Próximo Canto"
-                    
-                    if sugestao and f"sent_{id_jogo}" not in st.session_state:
-                        enviar_telegram(f"🚨 ENTRADA!\n🏟️ {casa} x {fora}\n🎯 {sugestao}\n📈 IG: {ig:.1f}")
-                        st.session_state[f"sent_{id_jogo}"] = True
+                chave_alerta = f"{id_j}_{mercado}"
+                if chave_alerta not in alertas_enviados:
+                    msg = (
+                        f"🚨 <b>ALERTA IA REI DA BOLA</b>\n"
+                        f"🏟️ {casa} x {fora} ({tempo}')\n"
+                        f"📊 Mercado: <b>{mercado}</b>\n"
+                        f"🎯 Índice: {indice:.1f}\n"
+                        f"⚽ Chutes no alvo: {no_alvo} | 🧨 Ataques: {ataques_p}"
+                    )
+                    enviar_telegram(msg)
+                    alertas_enviados.add(chave_alerta)
+                    st.session_state["alertas_enviados"] = alertas_enviados
 
-                    st.write("---")
-                    cb1, cb2 = st.columns(2)
-                    if cb1.button(f"✅ Green", key=f"g_{id_jogo}"):
-                        st.session_state.greens += 1
-                        st.session_state.historico.append({"Jogo": casa, "Res": "✅"})
+                with st.expander(f"🏟️ {casa} x {fora} ({tempo}') | {mercado} | IG: {ig:.1f} | IC: {ic:.1f}"):
+                    st.write(f"🎯 No Alvo: {no_alvo} | 🧨 Ataques: {ataques_p}")
+                    st.info(f"📌 Sugestão: **{mercado}**")
+
+                    col_b1, col_b2 = st.columns(2)
+                    if col_b1.button(f"✅ Green", key=f"win_{id_j}"):
+                        salvar_entrada(f"{casa}x{fora}", ig, "✅ GREEN", mercado)
                         st.rerun()
-                    if cb2.button(f"❌ Red", key=f"r_{id_jogo}"):
-                        st.session_state.reds += 1
-                        st.session_state.historico.append({"Jogo": casa, "Res": "❌"})
+                    if col_b2.button(f"❌ Red", key=f"loss_{id_j}"):
+                        salvar_entrada(f"{casa}x{fora}", ig, "❌ RED", mercado)
                         st.rerun()
     else:
-        st.info("Buscando jogos...")
+        st.info("Nenhum jogo ao vivo no momento.")
 
 with tab2:
-    if st.session_state.historico:
-        st.table(pd.DataFrame(st.session_state.historico))
-        
+    st.subheader("📊 Histórico Permanente (Supabase)")
+    st.dataframe(df_hist, use_container_width=True)
+
+    if st.button("🗑️ Limpar Histórico"):
+        limpar_historico()
+        st.success("Histórico limpo!")
+        st.rerun()
