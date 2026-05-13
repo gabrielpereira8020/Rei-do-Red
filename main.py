@@ -90,7 +90,7 @@ def init_services():
         )
 
         model = genai.GenerativeModel(
-    "gemini-1.5-pro"
+    "gemini-1.5-flash-latest"
         )
 
         return supabase, model
