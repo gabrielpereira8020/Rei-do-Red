@@ -497,3 +497,5 @@ with aba3:
 
     except Exception as e:
         st.error(f"Erro: {e}")
+
+st.write(analisar_com_ia("teste"))
