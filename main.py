@@ -169,22 +169,12 @@ def enviar_telegram(msg):
 
 def analisar_com_ia(contexto):
 
-    if not gemini:
-        return "IA offline"
+    try:
 
-    prompt = f"""
+        prompt = f"""
 Você é o REI DA BOLA.
 
-Faça uma análise profissional de trader esportivo.
-
-Analise:
-- pressão
-- momento
-- gols
-- intensidade
-- possíveis zebras
-- oportunidade de over
-- oportunidade de gol tardio
+Analise o jogo como trader esportivo profissional.
 
 CONTEXTO:
 {contexto}
@@ -197,17 +187,19 @@ FORMATO:
 💰 OPORTUNIDADE:
 """
 
-    try:
-
         resposta = gemini.generate_content(prompt)
 
-        if resposta.text:
+        st.write(resposta)
+
+        if hasattr(resposta, "text"):
+
             return resposta.text
 
-        return "Sem resposta da IA"
+        return "IA sem resposta"
 
-    except:
-        return "Erro temporário da IA"
+    except Exception as e:
+
+        return f"ERRO REAL DA IA: {str(e)}"
 
 # =====================================================
 # PRESSÃO
