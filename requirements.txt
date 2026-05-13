@@ -4,3 +4,4 @@ pandas
 streamlit-autorefresh
 supabase
 sportmonks
+GEMINI_KEY = "AIzaSyC98Dd5eY-AKZoRn2TmYzrxUiahZCRlxB4"
