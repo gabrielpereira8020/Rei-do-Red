@@ -490,7 +490,7 @@ with aba3:
                     ascending=False
                 ),
                 use_container_width=True
-            )
+            
             except Exception as e:
     return f"Erro IA: {e}"
 
