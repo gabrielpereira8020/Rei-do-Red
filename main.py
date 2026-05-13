@@ -490,8 +490,11 @@ with aba3:
                     ascending=False
                 ),
                 use_container_width=True
-            
-            except Exception as e:
-    return f"Erro IA: {e}"
+            )
 
-        
+        else:
+            st.info("Sem histórico")
+
+    except Exception as e:
+
+        st.error(f"Erro: {e}")
