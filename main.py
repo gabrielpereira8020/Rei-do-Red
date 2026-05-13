@@ -252,3 +252,218 @@ def salvar_resultado(jogo, resultado, confianca):
 
 st.sidebar.title("🏆 REI DA BOLA")
 st.sidebar.markdown("Painel Premium")
+
+# =====================================================
+# HISTÓRICO
+# =====================================================
+
+greens = 0
+reds = 0
+winrate = 0
+
+try:
+
+    historico = supabase.table("historico").select("*").execute()
+
+    if historico.data:
+
+        df_hist = pd.DataFrame(historico.data)
+
+        greens = len(
+            df_hist[df_hist["resultado"] == "GREEN"]
+        )
+
+        reds = len(
+            df_hist[df_hist["resultado"] == "RED"]
+        )
+
+        total = greens + reds
+
+        if total > 0:
+            winrate = round(
+                (greens / total) * 100,
+                1
+            )
+
+except:
+    pass
+
+st.sidebar.metric("✅ Greens", greens)
+st.sidebar.metric("❌ Reds", reds)
+st.sidebar.metric("📈 Winrate", f"{winrate}%")
+
+# =====================================================
+# HEADER
+# =====================================================
+
+st.title("🏆 IA REI DA BOLA PRO")
+st.caption("Radar inteligente para traders esportivos")
+
+# =====================================================
+# TABS
+# =====================================================
+
+aba1, aba2, aba3 = st.tabs([
+    "🎯 AO VIVO",
+    "🔮 PRÉ-JOGO",
+    "📊 HISTÓRICO"
+])
+
+# =====================================================
+# AO VIVO
+# =====================================================
+
+with aba1:
+
+    st.subheader("🎯 Radar ao Vivo")
+
+    with st.spinner("Buscando jogos..."):
+
+        jogos = fetch_api("fixtures?live=all")
+
+        elite = [
+            j for j in jogos
+            if j["league"]["id"] in LIGAS_ELITE
+        ]
+
+    if not elite:
+        st.info("Nenhum jogo ao vivo")
+
+    for jogo in elite:
+
+        fixture_id = jogo["fixture"]["id"]
+
+        home = jogo["teams"]["home"]["name"]
+        away = jogo["teams"]["away"]["name"]
+
+        gols_home = jogo["goals"]["home"]
+        gols_away = jogo["goals"]["away"]
+
+        tempo = jogo["fixture"]["status"]["elapsed"]
+
+        with st.expander(
+            f"⏱️ {tempo}' | {home} {gols_home}x{gols_away} {away}"
+        ):
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric("Mandante", home)
+            col2.metric(
+                "Placar",
+                f"{gols_home}-{gols_away}"
+            )
+            col3.metric("Visitante", away)
+
+            if st.button(
+                "Consultar IA",
+                key=f"live_{fixture_id}"
+            ):
+
+                stats = fetch_api(
+                    f"fixtures/statistics?fixture={fixture_id}"
+                )
+
+                pressao = calcular_pressao(stats)
+
+                st.metric("🔥 Pressão", pressao)
+
+                analise = analisar_com_ia(
+                    f"Jogo ao vivo: {home} x {away}, minuto {tempo}, pressão {pressao}"
+                )
+
+                st.markdown(analise)
+
+                c1, c2 = st.columns(2)
+
+                if c1.button(
+                    "✅ GREEN",
+                    key=f"green_{fixture_id}"
+                ):
+                    salvar_resultado(
+                        f"{home} x {away}",
+                        "GREEN",
+                        pressao
+                    )
+
+                if c2.button(
+                    "❌ RED",
+                    key=f"red_{fixture_id}"
+                ):
+                    salvar_resultado(
+                        f"{home} x {away}",
+                        "RED",
+                        pressao
+                    )
+
+# =====================================================
+# PRÉ JOGO
+# =====================================================
+
+with aba2:
+
+    hoje = datetime.now().strftime("%Y-%m-%d")
+
+    agenda = fetch_api(f"fixtures?date={hoje}")
+
+    jogos = [
+        j for j in agenda
+        if j["league"]["id"] in LIGAS_ELITE
+    ]
+
+    for jogo in jogos:
+
+        home = jogo["teams"]["home"]["name"]
+        away = jogo["teams"]["away"]["name"]
+
+        fixture_id = jogo["fixture"]["id"]
+
+        with st.expander(f"⚽ {home} x {away}"):
+
+            if st.button(
+                "Gerar análise",
+                key=f"pre_{fixture_id}"
+            ):
+
+                with st.spinner(
+                    "Analisando partida..."
+                ):
+
+                    time.sleep(1)
+
+                    analise = analisar_com_ia(
+                        f"Pré jogo: {home} x {away}"
+                    )
+
+                    st.markdown(analise)
+
+# =====================================================
+# HISTÓRICO
+# =====================================================
+
+with aba3:
+
+    st.subheader("📊 Histórico")
+
+    try:
+
+        historico = supabase.table(
+            "historico"
+        ).select("*").execute()
+
+        if historico.data:
+
+            df = pd.DataFrame(historico.data)
+
+            st.dataframe(
+                df.sort_values(
+                    "data",
+                    ascending=False
+                ),
+                use_container_width=True
+            )
+
+        else:
+            st.info("Sem histórico")
+
+    except Exception as e:
+        st.error(f"Erro: {e}")
