@@ -85,16 +85,19 @@ def init_services():
             st.secrets["SUPABASE_KEY"]
         )
 
-        genai.configure(
-            api_key=st.secrets["GEMINI_API_KEY"]
-        )
+                genai.configure(
+            api_key=st.secrets["GEMINI_API_KEY"],
+            transport='rest'
+                )
+        
 
         # O PULO DO GATO (Cole aqui para ver nos logs do Streamlit)
         for m in genai.list_models():
             print(f"Modelo disponível: {m.name}")
 
         # A CORREÇÃO (Mude esta linha)
-        model = genai.GenerativeModel("gemini-1.5-flash-latest") 
+                        model = genai.GenerativeModel("gemini-1.5-flash")
+            
 
         return supabase, model
 
