@@ -91,8 +91,8 @@ def init_services():
         )
 
             # O PULO DO GATO
-            for m in genai.list_models():
-            print(f"Modelo disponível: {m.name}")
+        for m in genai.list_models():
+        print(f"Modelo disponível: {m.name}")
 
         model = genai.GenerativeModel("gemini-1.5-flash")
 
