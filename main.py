@@ -81,11 +81,11 @@ def init_services():
     try:
 
         supabase = create_client(
-            st.secrets["SUPABASE_URL"],
+                st.secrets["SUPABASE_URL"],
                 st.secrets["SUPABASE_KEY"]
             )
 
-            genai.configure(
+        genai.configure(
                 api_key=st.secrets["GEMINI_API_KEY"],
                 transport='rest'
             )
