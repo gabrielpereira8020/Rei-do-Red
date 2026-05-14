@@ -82,24 +82,21 @@ def init_services():
 
         supabase = create_client(
             st.secrets["SUPABASE_URL"],
-            st.secrets["SUPABASE_KEY"]
-        )
+                st.secrets["SUPABASE_KEY"]
+            )
 
-                genai.configure(
-            api_key=st.secrets["GEMINI_API_KEY"],
-            transport='rest'
-                )
-        
+            genai.configure(
+                api_key=st.secrets["GEMINI_API_KEY"],
+                transport='rest'
+            )
 
-        # O PULO DO GATO (Cole aqui para ver nos logs do Streamlit)
-        for m in genai.list_models():
-            print(f"Modelo disponível: {m.name}")
+            # O PULO DO GATO
+            for m in genai.list_models():
+                print(f"Modelo disponível: {m.name}")
 
-        # A CORREÇÃO (Mude esta linha)
-                        model = genai.GenerativeModel("gemini-1.5-flash")
-            
+            model = genai.GenerativeModel("gemini-1.5-flash")
 
-        return supabase, model
+            return supabase, model
 
     except Exception as e:
 
