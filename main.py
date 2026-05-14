@@ -80,21 +80,21 @@ def init_services():
 
     try:
 
-        supabase = create_client(
-            st.secrets["SUPABASE_URL"],
-            st.secrets["SUPABASE_KEY"]
-            )
+            supabase = create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_KEY"]
+        )
 
-        genai.configure(
-            api_key=st.secrets["GEMINI_API_KEY"],
-            transport='rest'
-            )
+            genai.configure(
+        api_key=st.secrets["GEMINI_API_KEY"],
+        transport='rest'
+        )
 
             # O PULO DO GATO
             for m in genai.list_models():
             print(f"Modelo disponível: {m.name}")
 
-            model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
             return supabase, model
 
