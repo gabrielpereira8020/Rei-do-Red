@@ -90,8 +90,8 @@ def init_services():
         # Tentando o modelo na versão estável (v1)
         # O nome 'gemini-1.5-flash' sem o 'models/' costuma 
         # fazer o SDK escolher a melhor rota automaticamente.
-        model = genai.GenerativeModel("gemini-1.5-flash")
-
+        model = genai.GenerativeModel("gemini-1.5-flash-001")
+        
         return supabase, model
 
     except Exception as e:
