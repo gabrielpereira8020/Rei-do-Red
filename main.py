@@ -78,25 +78,31 @@ LIGAS_ELITE = [71,72,73,39,40,140,141,78,79,135,136,61,62,94]
 @st.cache_resource
 def init_services():
     try:
-        supabase = create_client(
-            st.secrets["SUPABASE_URL"],
-            st.secrets["SUPABASE_KEY"]
-        )
-
-        genai.configure(
-            api_key=st.secrets["GEMINI_API_KEY"]
-        )
-
-        # Tentando o modelo na versão estável (v1)
-        # O nome 'gemini-1.5-flash' sem o 'models/' costuma 
-        # fazer o SDK escolher a melhor rota automaticamente.
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
         
-        return supabase, model
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+        # O DIAGNÓSTICO REAL
+        modelos_disponiveis = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                modelos_disponiveis.append(m.name)
+        
+        # Isso vai aparecer no seu app Streamlit como uma lista
+        if modelos_disponiveis:
+            # Vamos tentar usar o primeiro da lista que seja Flash
+            escolhido = next((x for x in modelos_disponiveis if 'flash' in x), modelos_disponiveis[0])
+            model = genai.GenerativeModel(escolhido)
+            st.success(f"Conectado com sucesso ao modelo: {escolhido}")
+            return supabase, model
+        else:
+            st.error("Nenhum modelo disponível encontrado para esta chave.")
+            return None, None
 
     except Exception as e:
-        st.error(f"Erro ao iniciar serviços: {e}")
+        st.error(f"Erro de conexão: {e}")
         return None, None
+        
 
 supabase, gemini = init_services()
 
