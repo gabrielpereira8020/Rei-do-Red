@@ -77,31 +77,25 @@ LIGAS_ELITE = [71,72,73,39,40,140,141,78,79,135,136,61,62,94]
 
 @st.cache_resource
 def init_services():
-
     try:
-
         supabase = create_client(
             st.secrets["SUPABASE_URL"],
             st.secrets["SUPABASE_KEY"]
         )
 
         genai.configure(
-            api_key=st.secrets["GEMINI_API_KEY"],
-            transport='rest'
+            api_key=st.secrets["GEMINI_API_KEY"]
         )
 
-        # O PULO DO GATO PARA VER NOS LOGS
-        for m in genai.list_models():
-            print(f"Modelo disponível: {m.name}")
-
+        # Tentando o modelo na versão estável (v1)
+        # O nome 'gemini-1.5-flash' sem o 'models/' costuma 
+        # fazer o SDK escolher a melhor rota automaticamente.
         model = genai.GenerativeModel("gemini-1.5-flash")
 
         return supabase, model
 
     except Exception as e:
-
         st.error(f"Erro ao iniciar serviços: {e}")
-
         return None, None
 
 supabase, gemini = init_services()
