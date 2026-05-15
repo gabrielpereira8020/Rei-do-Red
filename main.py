@@ -39,7 +39,7 @@ supabase, model = init_services()
 # --- 3. FUNÇÕES DE SUPORTE (O "Cérebro" do App) ---
 def fetch_api(endpoint):
     url = f"https://v3.football.api-sports.io/{endpoint}"
-    headers = {"x-apisports-key": st.secrets["FOOTBALL_API_KEY"]}
+    headers = {"x-apisports-key": st.secrets["API_KEY"]}
     try:
         response = requests.get(url, headers=headers)
         return response.json().get("response", [])
