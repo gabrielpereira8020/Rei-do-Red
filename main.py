@@ -335,14 +335,14 @@ with aba1:
             tempo = jogo["fixture"]["status"]["elapsed"]
             
             with st.expander(f"⏱️ {tempo}' | {home} {gols_home} x {gols_away} {away}"):
-                col1, col2, col3 = st.columns(3)
+                cifol1, col2, col3 = st.columns(3)
                 col1.metric("Mandante", home)
                 col2.metric("Placar", f"{gols_home}-{gols_away}")
                 col3.metric("Visitante", away)
                 
 
                 # --- BOTÃO DE CONSULTA NO RADAR ---
-                if st.button("Consultar IA", key=f"live_{fixture_id}"):
+if st.button("Consultar IA", key=f"live_{fixture_id}"):
     with st.spinner("O Rei está analisando o campo..."):
         # 1. Busca os dados
         stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
@@ -363,6 +363,7 @@ with aba1:
             
         except Exception as e:
             st.error(f"O Rei teve um problema na análise: {e}")
+            
             
                             
 
