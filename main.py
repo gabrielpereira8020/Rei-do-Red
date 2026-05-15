@@ -322,15 +322,14 @@ aba1, aba2, aba3 = st.tabs([
 # AO VIVO
 # =====================================================
 
-with aba1:
+    with aba1:
         st.subheader("🎯 Radar ao Vivo")
         
-        with st.spinner("Buscando jogos..."):
-            jogos = fetch_api("fixtures?live=all")
-            elite = [j for j in jogos if j["league"]["id"] in LIGAS_ELITE]
-            
+        jogos = fetch_api("fixtures?live=all")
+        elite = [j for j in jogos if j["league"]["id"] in LIGAS_ELITE]
+        
         if not elite:
-            st.info("Nenhum jogo de elite ao vivo no momento.")
+            st.info("Buscando jogos de elite...")
             
         for jogo in elite:
             fixture_id = jogo["fixture"]["id"]
@@ -346,42 +345,36 @@ with aba1:
                 col2.metric("Placar", f"{gols_home}-{gols_away}")
                 col3.metric("Visitante", away)
                 
-                # BOTÃO DE CONSULTA - Toda a lógica da IA deve estar DENTRO do IF
-                                if st.button("Consultar IA", key=f"live_{fixture_id}"):
-                    with st.spinner("O Rei está analisando o campo..."):
-                        # 1. Busca estatísticas (Aqui o sistema pega os dados da API)
+                # BOTÃO DE CONSULTA
+                if st.button("Consultar IA", key=f"live_{fixture_id}"):
+                    with st.spinner("O Rei está analisando..."):
+                        # Busca estatísticas do jogo
                         stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
                         pressao = calcular_pressao(stats)
                         
-                        # 2. Prepara os dados para enviar para a IA
+                        # Prepara a entrada
                         dados_brutos = f"Jogo: {home} x {away}, Minuto: {tempo}, Pressão: {pressao}, Stats: {stats}"
-                        
-                        # 3. Chama a função que cria as instruções
                         prompt_instrucoes = analisar_com_ia(dados_brutos)
                         
                         try:
-                            # ESTA É A LINHA QUE FALTAVA: Ela envia para o Gemini
+                            # MANDA PARA O GOOGLE E RECEBE A RESPOSTA
                             response = model.generate_content(prompt_instrucoes)
                             
-                            # 4. Exibe a resposta REAL da IA na tela
+                            # EXIBE A ANÁLISE REAL
                             st.markdown("---")
-                            st.markdown(response.text) # Aqui ele mostra o palpite real!
+                            st.markdown(response.text)
                             st.markdown("---")
                             st.metric("🔥 Pressão no Momento", pressao)
-                            
                         except Exception as e:
-                            st.error(f"Erro ao consultar o Rei: {e}")
-    
+                            st.error(f"Erro ao processar análise: {e}")
 
-                # Botões de Green/Red (Abaixo da análise)
+                # Botões de Resultado
                 c1, c2 = st.columns(2)
                 if c1.button("✅ GREEN", key=f"green_{fixture_id}"):
-                    salvar_resultado(f"{home} x {away}", "GREEN", 100) # Exemplo de pressão 100
-                    st.success("Registrado no Histórico!")
-                
+                    salvar_resultado(f"{home} x {away}", "GREEN", 100)
                 if c2.button("❌ RED", key=f"red_{fixture_id}"):
                     salvar_resultado(f"{home} x {away}", "RED", 0)
-                    st.error("Registrado no Histórico!")
+                    
 
 # =====================================================
 # PRÉ JOGO
