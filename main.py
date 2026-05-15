@@ -156,11 +156,11 @@ def enviar_telegram(msg):
         pass
 
 
-# =====================================================
-# IA
-# =====================================================
+# ==========================================================
+# IA - AJUSTADO PARA O NOME CORRETO
+# ==========================================================
 
-def gerar_analise_ia(dados_do_jogo):
+def analisar_com_ia(dados_do_jogo): # Mudei o nome aqui para bater com a linha 441
     prompt = f"""
     Você é o Analista Senior do 'IA REI DA BOLA PRO'. 
     Sua missão é dar um palpite de alta precisão usando os dados estatísticos.
@@ -186,6 +186,7 @@ def gerar_analise_ia(dados_do_jogo):
     {dados_do_jogo}
     """
     return prompt
+    
 
 # =====================================================
 # PRESSÃO
