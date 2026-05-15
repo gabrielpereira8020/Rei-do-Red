@@ -24,15 +24,17 @@ LIGAS_ELITE = [13, 61, 94, 140, 78, 135, 39, 141, 2, 3, 848]
 @st.cache_resource
 def init_services():
     try:
-        # Conexão Supabase
         supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-        # Configuração Google Gemini 1.5 Flash
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        
+        # MUDANÇA AQUI: Usamos o nome simples, que é o padrão para a cota gratuita
         model = genai.GenerativeModel("gemini-1.5-flash")
+        
         return supabase, model
     except Exception as e:
-        st.error(f"Erro na conexão de serviços: {e}")
+        st.error(f"Erro na conexão: {e}")
         return None, None
+        
 
 supabase, model = init_services()
 
