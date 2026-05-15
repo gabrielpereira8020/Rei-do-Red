@@ -347,26 +347,31 @@ with aba1:
                 col3.metric("Visitante", away)
                 
                 # BOTÃO DE CONSULTA - Toda a lógica da IA deve estar DENTRO do IF
-                if st.button("Consultar IA", key=f"live_{fixture_id}"):
+                                if st.button("Consultar IA", key=f"live_{fixture_id}"):
                     with st.spinner("O Rei está analisando o campo..."):
-                        # 1. Busca estatísticas detalhadas (Cantos, Chutes, etc)
+                        # 1. Busca estatísticas (Aqui o sistema pega os dados da API)
                         stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
                         pressao = calcular_pressao(stats)
-                        st.metric("🔥 Pressão Atual", pressao)
                         
-                        # 2. Prepara os dados para a IA
-                        dados_input = f"Jogo: {home} x {away}, Minuto: {tempo}, Placar: {gols_home}-{gols_away}, Pressão: {pressao}, Stats: {stats}"
+                        # 2. Prepara os dados para enviar para a IA
+                        dados_brutos = f"Jogo: {home} x {away}, Minuto: {tempo}, Pressão: {pressao}, Stats: {stats}"
                         
-                        # 3. Chama a IA e recebe a resposta REAL
+                        # 3. Chama a função que cria as instruções
+                        prompt_instrucoes = analisar_com_ia(dados_brutos)
+                        
                         try:
-                            prompt_final = analisar_com_ia(dados_input)
-                            response = model.generate_content(prompt_final)
-                            # Exibe a resposta da IA formatada
+                            # ESTA É A LINHA QUE FALTAVA: Ela envia para o Gemini
+                            response = model.generate_content(prompt_instrucoes)
+                            
+                            # 4. Exibe a resposta REAL da IA na tela
                             st.markdown("---")
-                            st.markdown(response.text)
+                            st.markdown(response.text) # Aqui ele mostra o palpite real!
                             st.markdown("---")
+                            st.metric("🔥 Pressão no Momento", pressao)
+                            
                         except Exception as e:
-                            st.error(f"Erro na análise: {e}")
+                            st.error(f"Erro ao consultar o Rei: {e}")
+    
 
                 # Botões de Green/Red (Abaixo da análise)
                 c1, c2 = st.columns(2)
