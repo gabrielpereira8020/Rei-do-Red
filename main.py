@@ -323,86 +323,60 @@ aba1, aba2, aba3 = st.tabs([
 # =====================================================
 
 with aba1:
+        st.subheader("🎯 Radar ao Vivo")
+        
+        with st.spinner("Buscando jogos..."):
+            jogos = fetch_api("fixtures?live=all")
+            elite = [j for j in jogos if j["league"]["id"] in LIGAS_ELITE]
+            
+        if not elite:
+            st.info("Nenhum jogo de elite ao vivo no momento.")
+            
+        for jogo in elite:
+            fixture_id = jogo["fixture"]["id"]
+            home = jogo["teams"]["home"]["name"]
+            away = jogo["teams"]["away"]["name"]
+            gols_home = jogo["goals"]["home"]
+            gols_away = jogo["goals"]["away"]
+            tempo = jogo["fixture"]["status"]["elapsed"]
+            
+            with st.expander(f"⏱️ {tempo}' | {home} {gols_home} x {gols_away} {away}"):
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Mandante", home)
+                col2.metric("Placar", f"{gols_home}-{gols_away}")
+                col3.metric("Visitante", away)
+                
+                # BOTÃO DE CONSULTA - Toda a lógica da IA deve estar DENTRO do IF
+                if st.button("Consultar IA", key=f"live_{fixture_id}"):
+                    with st.spinner("O Rei está analisando o campo..."):
+                        # 1. Busca estatísticas detalhadas (Cantos, Chutes, etc)
+                        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
+                        pressao = calcular_pressao(stats)
+                        st.metric("🔥 Pressão Atual", pressao)
+                        
+                        # 2. Prepara os dados para a IA
+                        dados_input = f"Jogo: {home} x {away}, Minuto: {tempo}, Placar: {gols_home}-{gols_away}, Pressão: {pressao}, Stats: {stats}"
+                        
+                        # 3. Chama a IA e recebe a resposta REAL
+                        try:
+                            prompt_final = analisar_com_ia(dados_input)
+                            response = model.generate_content(prompt_final)
+                            # Exibe a resposta da IA formatada
+                            st.markdown("---")
+                            st.markdown(response.text)
+                            st.markdown("---")
+                        except Exception as e:
+                            st.error(f"Erro na análise: {e}")
 
-    st.subheader("🎯 Radar ao Vivo")
-
-    with st.spinner("Buscando jogos..."):
-
-        jogos = fetch_api("fixtures?live=all")
-
-        elite = [
-            j for j in jogos
-            if j["league"]["id"] in LIGAS_ELITE
-        ]
-
-    if not elite:
-        st.info("Nenhum jogo ao vivo")
-
-    for jogo in elite:
-
-        fixture_id = jogo["fixture"]["id"]
-
-        home = jogo["teams"]["home"]["name"]
-        away = jogo["teams"]["away"]["name"]
-
-        gols_home = jogo["goals"]["home"]
-        gols_away = jogo["goals"]["away"]
-
-        tempo = jogo["fixture"]["status"]["elapsed"]
-
-        with st.expander(
-            f"⏱️ {tempo}' | {home} {gols_home}x{gols_away} {away}"
-        ):
-
-            col1, col2, col3 = st.columns(3)
-
-            col1.metric("Mandante", home)
-            col2.metric(
-                "Placar",
-                f"{gols_home}-{gols_away}"
-            )
-            col3.metric("Visitante", away)
-
-            if st.button(
-                "Consultar IA",
-                key=f"live_{fixture_id}"
-            ):
-
-                stats = fetch_api(
-                    f"fixtures/statistics?fixture={fixture_id}"
-                )
-
-                pressao = calcular_pressao(stats)
-
-                st.metric("🔥 Pressão", pressao)
-
-                analise = analisar_com_ia(
-                    f"Jogo ao vivo: {home} x {away}, minuto {tempo}, pressão {pressao}"
-                )
-
-                st.markdown(analise)
-
+                # Botões de Green/Red (Abaixo da análise)
                 c1, c2 = st.columns(2)
-
-                if c1.button(
-                    "✅ GREEN",
-                    key=f"green_{fixture_id}"
-                ):
-                    salvar_resultado(
-                        f"{home} x {away}",
-                        "GREEN",
-                        pressao
-                    )
-
-                if c2.button(
-                    "❌ RED",
-                    key=f"red_{fixture_id}"
-                ):
-                    salvar_resultado(
-                        f"{home} x {away}",
-                        "RED",
-                        pressao
-                    )
+                if c1.button("✅ GREEN", key=f"green_{fixture_id}"):
+                    salvar_resultado(f"{home} x {away}", "GREEN", 100) # Exemplo de pressão 100
+                    st.success("Registrado no Histórico!")
+                
+                if c2.button("❌ RED", key=f"red_{fixture_id}"):
+                    salvar_resultado(f"{home} x {away}", "RED", 0)
+                    st.error("Registrado no Histórico!")
 
 # =====================================================
 # PRÉ JOGO
