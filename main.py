@@ -382,7 +382,7 @@ with aba1:
 # PRÉ JOGO
 # =====================================================
 
-    with aba2:
+with aba2:
         st.subheader("📅 Análise Pré-Jogo")
         
         hoje = datetime.now().strftime('%Y-%m-%d')
