@@ -162,30 +162,30 @@ def enviar_telegram(msg):
 
 # 1. FUNÇÃO DA IA (As instruções que o Rei segue)
 def analisar_com_ia(dados_do_jogo):
-    return f"""
+    # Esta função APENAS cria o texto das instruções
+    prompt = f"""
     Você é o Analista Senior do 'IA REI DA BOLA PRO'. 
     Sua missão é dar um palpite de alta precisão.
-    Analise obrigatoriamente: Gols, Escanteios e Cartões.
+    Analise obrigatoriamente: Gols, Escanteios (Corners) e Cartões.
     
-    Responda EXATAMENTE neste formato:
+    Responda EXATAMENTE neste formato (não use introduções):
 
     🎯 **O PALPITE DO REI (A CRAVADA)**
-    [Sua melhor entrada aqui]
+    [Sua melhor entrada entre Gols, Cantos ou Cartões]
 
     💰 **ALAVANCAGEM (ODD ALTA)**
-    [Sugestão de Odd alta aqui]
+    [Sugestão de Odd acima de 2.0]
 
     📈 **RADAR DE TENDÊNCIAS**
-    - Escanteios: [Tendência]
-    - Cartões: [Tendência]
+    - Escanteios: [Tendência com base na pressão]
+    - Cartões: [Tendência de cartões]
 
     ⚠️ **VEREDITO AO VIVO**
-    [Status da entrada]
+    [ENTRAR AGORA | AGUARDAR ODD | FORA DO RADAR]
 
-    DADOS: {dados_do_jogo}
+    DADOS DO JOGO:
+    {dados_do_jogo}
     """
-
-            
     return prompt
     
 
@@ -347,29 +347,32 @@ with aba1:
                 col3.metric("Visitante", away)
                 
 
-# 2. BLOCO DO RADAR (Onde clicas no botão)
-# Garante que esta parte está exatamente assim dentro do teu loop de jogos:
-
-if st.button("Consultar IA", key=f"live_{fixture_id}"):
-    with st.spinner("O Rei está analisando..."):
-        # Pega os dados reais
-        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
-        pressao = calcular_pressao(stats)
-        
-        # Monta o texto para a IA
-        texto_para_ia = analisar_com_ia(f"Jogo: {home} x {away}, Stats: {stats}")
-        
-        try:
-            # ESTA LINHA É A CHAVE: Ela envia para o Google
-            resultado = model.generate_content(texto_para_ia)
-            
-            # MOSTRA A RESPOSTA REAL (response.text)
-            st.markdown("---")
-            st.markdown(resultado.text)
-            st.markdown("---")
-            st.metric("🔥 Pressão Atual", pressao)
-        except Exception as e:
-            st.error(f"Erro na IA: {e}")
+                # --- BOTÃO DE CONSULTA NO RADAR ---
+                if st.button("Consultar IA", key=f"live_{fixture_id}"):
+                    with st.spinner("O Rei está analisando o campo..."):
+                        # 1. Pega estatísticas reais da API
+                        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
+                        pressao = calcular_pressao(stats)
+                        
+                        # 2. Monta o pacote de dados
+                        dados_brutos = f"Jogo: {home} x {away}, Minuto: {tempo}, Pressão: {pressao}, Stats: {stats}"
+                        
+                        # 3. Pega as instruções do analista
+                        instrucoes = analisar_com_ia(dados_brutos)
+                        
+                        try:
+                            # 4. ENVIA PARA O GOOGLE E PEGA A RESPOSTA REAL
+                            response = model.generate_content(instrucoes)
+                            
+                            # 5. MOSTRA APENAS O PALPITE NA TELA
+                            st.markdown("---")
+                            st.markdown(response.text) # <--- ISSO MOSTRA O PALPITE
+                            st.markdown("---")
+                            st.metric("🔥 Pressão no Momento", pressao)
+                            
+                        except Exception as e:
+                            st.error(f"Erro ao consultar a IA: {e}")
+                            
             
 
                 # Botões de Resultado
