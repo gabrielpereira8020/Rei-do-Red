@@ -322,7 +322,7 @@ aba1, aba2, aba3 = st.tabs([
 # AO VIVO
 # =====================================================
 
-    with aba1:
+with aba1:
         st.subheader("🎯 Radar ao Vivo")
         
         jogos = fetch_api("fixtures?live=all")
