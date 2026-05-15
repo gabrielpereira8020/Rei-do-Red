@@ -78,29 +78,19 @@ LIGAS_ELITE = [71,72,73,39,40,140,141,78,79,135,136,61,62,94]
 @st.cache_resource
 def init_services():
     try:
-        supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+        # Conexão segura com Supabase
+        supabase = create_client(
+            st.secrets["SUPABASE_URL"], 
+            st.secrets["SUPABASE_KEY"]
+        )
         
+        # Configuração do Gemini (Usando 1.5 Flash para evitar erros de limite)
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-        # O DIAGNÓSTICO REAL
-        modelos_disponiveis = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                modelos_disponiveis.append(m.name)
+        model = genai.GenerativeModel("gemini-1.5-flash")
         
-        # Isso vai aparecer no seu app Streamlit como uma lista
-        if modelos_disponiveis:
-            # Vamos tentar usar o primeiro da lista que seja Flash
-            escolhido = next((x for x in modelos_disponiveis if 'flash' in x), modelos_disponiveis[0])
-            model = genai.GenerativeModel(escolhido)
-            st.success(f"Conectado com sucesso ao modelo: {escolhido}")
-            return supabase, model
-        else:
-            st.error("Nenhum modelo disponível encontrado para esta chave.")
-            return None, None
-
+        return supabase, model
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
+        st.error(f"Erro ao ligar os motores: {e}")
         return None, None
         
 
@@ -170,39 +160,32 @@ def enviar_telegram(msg):
 # IA
 # =====================================================
 
-def analisar_com_ia(contexto):
+def gerar_analise_ia(dados_do_jogo):
+    prompt = f"""
+    Você é o Analista Senior do 'IA REI DA BOLA PRO'. 
+    Sua missão é dar um palpite de alta precisão usando os dados estatísticos.
+    
+    Analise obrigatoriamente: Gols, Escanteios (Corners) e Cartões.
+    
+    Responda EXATAMENTE neste formato (não use introduções):
 
-    try:
+    🎯 **O PALPITE DO REI (A CRAVADA)**
+    [Escolha a melhor entrada com maior confiança entre Gols, Cantos ou Cartões]
 
-        prompt = f"""
-Você é o REI DA BOLA.
+    💰 **ALAVANCAGEM (ODD ALTA)**
+    [Uma sugestão de valor com odd maior. Ex: Vitória do Mandante + Ambos Marcam]
 
-Analise o jogo como trader esportivo profissional.
+    📈 **RADAR DE TENDÊNCIAS**
+    - Escanteios: [Diga se a pressão atual favorece novos cantos]
+    - Cartões: [Diga se o clima do jogo e histórico favorecem entradas em cartões]
 
-CONTEXTO:
-{contexto}
+    ⚠️ **VEREDITO AO VIVO**
+    [Diga: ENTRAR AGORA | AGUARDAR VALORIZAR ODD | FORA DO RADAR]
 
-FORMATO:
-
-🎯 VEREDITO:
-🔥 FEELING:
-📈 CONFIANÇA:
-💰 OPORTUNIDADE:
-"""
-
-        resposta = gemini.generate_content(prompt)
-
-        st.write(resposta)
-
-        if hasattr(resposta, "text"):
-
-            return resposta.text
-
-        return "IA sem resposta"
-
-    except Exception as e:
-
-        return f"ERRO REAL DA IA: {str(e)}"
+    DADOS DO JOGO:
+    {dados_do_jogo}
+    """
+    return prompt
 
 # =====================================================
 # PRESSÃO
