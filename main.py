@@ -383,42 +383,35 @@ with aba1:
 # =====================================================
 
 with aba2:
-        st.subheader("📅 Análise Pré-Jogo")
+        st.subheader("📅 Análise Pré-Jogo Profissional")
         
         hoje = datetime.now().strftime('%Y-%m-%d')
-        with st.spinner("Buscando agenda..."):
-            agenda = fetch_api(f"fixtures?date={hoje}")
+        agenda = fetch_api(f"fixtures?date={hoje}")
+        jogos_pre = [j for j in agenda if j["league"]["id"] in LIGAS_ELITE]
         
-        jogos_pre = [
-            j for j in agenda 
-            if j["league"]["id"] in LIGAS_ELITE
-        ]
-        
-        if not jogos_pre:
-            st.info("Nenhum jogo de elite agendado para hoje.")
-
         for jogo in jogos_pre:
             home = jogo["teams"]["home"]["name"]
             away = jogo["teams"]["away"]["name"]
-            fixture_id = jogo["fixture"]["id"]
+            f_id = jogo["fixture"]["id"]
+            liga = jogo["league"]["name"]
             
-            with st.expander(f"⚽ {home} x {away}"):
-                # ESTA LINHA ABAIXO PRECISA DE 16 ESPAÇOS (OU 4 TABS)
-                if st.button("Gerar Análise Real", key=f"pre_{fixture_id}"):
-                    with st.spinner("O Rei está estudando as equipes..."):
-                        # 1. Gera as instruções
-                        prompt_instrucoes = analisar_com_ia(f"Pré-jogo: {home} x {away}")
+            with st.expander(f"🏟️ {liga}: {home} x {away}"):
+                st.write(f"Início: {jogo['fixture']['date'][11:16]} (Horário Local)")
+                
+                if st.button("📊 GERAR RELATÓRIO PRÉ-JOGO", key=f"pre_btn_{f_id}"):
+                    with st.spinner("Consultando histórico e odds..."):
+                        # No Pré-jogo, enviamos os times e a liga
+                        dados_pre = f"Liga: {liga}, Mandante: {home}, Visitante: {away}, Contexto: Análise de probabilidade de vitória e gols."
+                        prompt = analisar_com_ia(dados_pre)
                         
                         try:
-                            # 2. Chama a IA
-                            response = model.generate_content(prompt_instrucoes)
-                            
-                            # 3. Mostra o palpite
+                            response = model.generate_content(prompt)
                             st.markdown("---")
+                            st.info("👑 **CONSULTORIA DO REI**")
                             st.markdown(response.text)
                             st.markdown("---")
                         except Exception as e:
-                            st.error(f"Erro na análise: {e}")
+                            st.error(f"Erro técnico: {e}")
                             
 
 # =====================================================
