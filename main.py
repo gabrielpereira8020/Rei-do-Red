@@ -157,34 +157,35 @@ def enviar_telegram(msg):
 
 
 # ==========================================================
-# IA - AJUSTADO PARA O NOME CORRETO
+# IA -
 # ==========================================================
 
-def analisar_com_ia(dados_do_jogo): # Mudei o nome aqui para bater com a linha 441
-    prompt = f"""
+# 1. FUNÇÃO DA IA (As instruções que o Rei segue)
+def analisar_com_ia(dados_do_jogo):
+    return f"""
     Você é o Analista Senior do 'IA REI DA BOLA PRO'. 
-    Sua missão é dar um palpite de alta precisão usando os dados estatísticos.
+    Sua missão é dar um palpite de alta precisão.
+    Analise obrigatoriamente: Gols, Escanteios e Cartões.
     
-    Analise obrigatoriamente: Gols, Escanteios (Corners) e Cartões.
-    
-    Responda EXATAMENTE neste formato (não use introduções):
+    Responda EXATAMENTE neste formato:
 
     🎯 **O PALPITE DO REI (A CRAVADA)**
-    [Escolha a melhor entrada com maior confiança entre Gols, Cantos ou Cartões]
+    [Sua melhor entrada aqui]
 
     💰 **ALAVANCAGEM (ODD ALTA)**
-    [Uma sugestão de valor com odd maior. Ex: Vitória do Mandante + Ambos Marcam]
+    [Sugestão de Odd alta aqui]
 
     📈 **RADAR DE TENDÊNCIAS**
-    - Escanteios: [Diga se a pressão atual favorece novos cantos]
-    - Cartões: [Diga se o clima do jogo e histórico favorecem entradas em cartões]
+    - Escanteios: [Tendência]
+    - Cartões: [Tendência]
 
     ⚠️ **VEREDITO AO VIVO**
-    [Diga: ENTRAR AGORA | AGUARDAR VALORIZAR ODD | FORA DO RADAR]
+    [Status da entrada]
 
-    DADOS DO JOGO:
-    {dados_do_jogo}
+    DADOS: {dados_do_jogo}
     """
+
+            
     return prompt
     
 
@@ -345,28 +346,31 @@ with aba1:
                 col2.metric("Placar", f"{gols_home}-{gols_away}")
                 col3.metric("Visitante", away)
                 
-                # BOTÃO DE CONSULTA
-                if st.button("Consultar IA", key=f"live_{fixture_id}"):
-                    with st.spinner("O Rei está analisando..."):
-                        # Busca estatísticas do jogo
-                        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
-                        pressao = calcular_pressao(stats)
-                        
-                        # Prepara a entrada
-                        dados_brutos = f"Jogo: {home} x {away}, Minuto: {tempo}, Pressão: {pressao}, Stats: {stats}"
-                        prompt_instrucoes = analisar_com_ia(dados_brutos)
-                        
-                        try:
-                            # MANDA PARA O GOOGLE E RECEBE A RESPOSTA
-                            response = model.generate_content(prompt_instrucoes)
-                            
-                            # EXIBE A ANÁLISE REAL
-                            st.markdown("---")
-                            st.markdown(response.text)
-                            st.markdown("---")
-                            st.metric("🔥 Pressão no Momento", pressao)
-                        except Exception as e:
-                            st.error(f"Erro ao processar análise: {e}")
+
+# 2. BLOCO DO RADAR (Onde clicas no botão)
+# Garante que esta parte está exatamente assim dentro do teu loop de jogos:
+
+if st.button("Consultar IA", key=f"live_{fixture_id}"):
+    with st.spinner("O Rei está analisando..."):
+        # Pega os dados reais
+        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
+        pressao = calcular_pressao(stats)
+        
+        # Monta o texto para a IA
+        texto_para_ia = analisar_com_ia(f"Jogo: {home} x {away}, Stats: {stats}")
+        
+        try:
+            # ESTA LINHA É A CHAVE: Ela envia para o Google
+            resultado = model.generate_content(texto_para_ia)
+            
+            # MOSTRA A RESPOSTA REAL (response.text)
+            st.markdown("---")
+            st.markdown(resultado.text)
+            st.markdown("---")
+            st.metric("🔥 Pressão Atual", pressao)
+        except Exception as e:
+            st.error(f"Erro na IA: {e}")
+            
 
                 # Botões de Resultado
                 c1, c2 = st.columns(2)
