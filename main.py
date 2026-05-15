@@ -78,23 +78,17 @@ LIGAS_ELITE = [71,72,73,39,40,140,141,78,79,135,136,61,62,94]
 @st.cache_resource
 def init_services():
     try:
-        # Conexão segura com Supabase
-        supabase = create_client(
-            st.secrets["SUPABASE_URL"], 
-            st.secrets["SUPABASE_KEY"]
-        )
-        
-        # Configuração do Gemini (Usando 1.5 Flash para evitar erros de limite)
+        supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        # Modelo Flash 1.5 é o segredo para não travar
         model = genai.GenerativeModel("gemini-1.5-flash")
-        
         return supabase, model
     except Exception as e:
-        st.error(f"Erro ao ligar os motores: {e}")
+        st.error(f"Erro: {e}")
         return None, None
-        
 
-supabase, gemini = init_services()
+supabase, model = init_services()
+
 
 API_KEY = st.secrets["API_KEY"]
 
@@ -349,31 +343,28 @@ with aba1:
 
                 # --- BOTÃO DE CONSULTA NO RADAR ---
                 if st.button("Consultar IA", key=f"live_{fixture_id}"):
-                    with st.spinner("O Rei está analisando o campo..."):
-                        # 1. Pega estatísticas reais da API
-                        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
-                        pressao = calcular_pressao(stats)
-                        
-                        # 2. Monta o pacote de dados
-                        dados_brutos = f"Jogo: {home} x {away}, Minuto: {tempo}, Pressão: {pressao}, Stats: {stats}"
-                        
-                        # 3. Pega as instruções do analista
-                        instrucoes = analisar_com_ia(dados_brutos)
-                        
-                        try:
-                            # 4. ENVIA PARA O GOOGLE E PEGA A RESPOSTA REAL
-                            response = model.generate_content(instrucoes)
-                            
-                            # 5. MOSTRA APENAS O PALPITE NA TELA
-                            st.markdown("---")
-                            st.markdown(response.text) # <--- ISSO MOSTRA O PALPITE
-                            st.markdown("---")
-                            st.metric("🔥 Pressão no Momento", pressao)
-                            
-                        except Exception as e:
-                            st.error(f"Erro ao consultar a IA: {e}")
-                            
+    with st.spinner("O Rei está analisando o campo..."):
+        # 1. Busca os dados
+        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
+        pressao = calcular_pressao(stats)
+        
+        # 2. Cria o pedido (instruções)
+        texto_instrucoes = analisar_com_ia(f"Jogo: {home} x {away}, Pressão: {pressao}, Stats: {stats}")
+        
+        try:
+            # 3. ENVIA PARA A IA (Esta linha faz a mágica)
+            resposta = model.generate_content(texto_instrucoes)
             
+            # 4. MOSTRA A RESPOSTA REAL (O palpite do Rei)
+            st.markdown("---")
+            st.markdown(resposta.text) # <--- AQUI É O SEGREDO! Mostrar o .text
+            st.markdown("---")
+            st.metric("🔥 Pressão Atual", pressao)
+            
+        except Exception as e:
+            st.error(f"O Rei teve um problema na análise: {e}")
+            
+                            
 
                 # Botões de Resultado
                 c1, c2 = st.columns(2)
