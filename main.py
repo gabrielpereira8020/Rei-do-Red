@@ -325,7 +325,6 @@ with aba1:
         
         if not elite:
             st.info("Buscando jogos de elite...")
-            
         for jogo in elite:
             fixture_id = jogo["fixture"]["id"]
             home = jogo["teams"]["home"]["name"]
@@ -335,44 +334,40 @@ with aba1:
             tempo = jogo["fixture"]["status"]["elapsed"]
             
             with st.expander(f"⏱️ {tempo}' | {home} {gols_home} x {gols_away} {away}"):
-                cifol1, col2, col3 = st.columns(3)
+                col1, col2, col3 = st.columns(3)
                 col1.metric("Mandante", home)
                 col2.metric("Placar", f"{gols_home}-{gols_away}")
                 col3.metric("Visitante", away)
                 
+                # BOTAO CONSULTAR IA
+                if st.button("Consultar IA", key=f"live_{fixture_id}"):
+                    with st.spinner("O Rei está analisando..."):
+                        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
+                        pressao = calcular_pressao(stats)
+                        
+                        dados_brutos = f"Jogo: {home} x {away}, Stats: {stats}"
+                        instrucoes = analisar_com_ia(dados_brutos)
+                        
+                        try:
+                            # ENVIA E RECEBE A RESPOSTA REAL
+                            response = model.generate_content(instrucoes)
+                            st.markdown("---")
+                            st.markdown(response.text)
+                            st.markdown("---")
+                            st.metric("🔥 Pressão Atual", pressao)
+                        except Exception as e:
+                            st.error(f"Erro na IA: {e}")
 
-                # --- BOTÃO DE CONSULTA NO RADAR ---
-if st.button("Consultar IA", key=f"live_{fixture_id}"):
-    with st.spinner("O Rei está analisando o campo..."):
-        # 1. Busca os dados
-        stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
-        pressao = calcular_pressao(stats)
-        
-        # 2. Cria o pedido (instruções)
-        texto_instrucoes = analisar_com_ia(f"Jogo: {home} x {away}, Pressão: {pressao}, Stats: {stats}")
-        
-        try:
-            # 3. ENVIA PARA A IA (Esta linha faz a mágica)
-            resposta = model.generate_content(texto_instrucoes)
-            
-            # 4. MOSTRA A RESPOSTA REAL (O palpite do Rei)
-            st.markdown("---")
-            st.markdown(resposta.text) # <--- AQUI É O SEGREDO! Mostrar o .text
-            st.markdown("---")
-            st.metric("🔥 Pressão Atual", pressao)
-            
-        except Exception as e:
-            st.error(f"O Rei teve um problema na análise: {e}")
-            
-            
-                            
-
-                # Botões de Resultado
+                # BOTOES DE GREEN E RED
                 c1, c2 = st.columns(2)
                 if c1.button("✅ GREEN", key=f"green_{fixture_id}"):
                     salvar_resultado(f"{home} x {away}", "GREEN", 100)
+                    st.success("Salvo!")
+                
                 if c2.button("❌ RED", key=f"red_{fixture_id}"):
                     salvar_resultado(f"{home} x {away}", "RED", 0)
+                    st.error("Salvo!")
+                    
                     
 
 # =====================================================
