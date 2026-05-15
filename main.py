@@ -403,25 +403,21 @@ with aba2:
             fixture_id = jogo["fixture"]["id"]
             
             with st.expander(f"⚽ {home} x {away}"):
-                # BOTÃO DE ANÁLISE PRÉ-JOGO
-                if st.button("Gerar Análise Real", key=f"pre_{fixture_id}"):
-                    with st.spinner("O Rei está estudando as equipes..."):
-                        # 1. Prepara os dados (No pré-jogo não tem pressão ainda)
-                        dados_input = f"Jogo Pré-jogo: {home} x {away}"
-                        
-                        # 2. Pega as instruções
-                        prompt_instrucoes = analisar_com_ia(dados_input)
-                        
-                        try:
-                            # 3. CHAMA A IA DE VERDADE
-                            resposta = model.generate_content(prompt_instrucoes)
-                            
-                            # 4. EXIBE O PALPITE REAL
-                            st.markdown("---")
-                            st.markdown(resposta.text)
-                            st.markdown("---")
-                        except Exception as e:
-                            st.error(f"Erro na análise: {e}")
+    if st.button("Gerar Análise Real", key=f"pre_{fixture_id}"):
+        with st.spinner("O Rei está estudando as equipes..."):
+            # 1. Gera as instruções
+            prompt_instrucoes = analisar_com_ia(f"Pré-jogo: {home} x {away}")
+            
+            try:
+                # 2. CHAMA A IA DE VERDADE (Essa parte substitui o antigo 'analise')
+                response = model.generate_content(prompt_instrucoes)
+                
+                # 3. MOSTRA O TEXTO QUE A IA ESCREVEU
+                st.markdown("---")
+                st.markdown(response.text) 
+                st.markdown("---")
+            except Exception as e:
+                st.error(f"Erro na análise: {e}")
                             
 
 # =====================================================
