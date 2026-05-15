@@ -402,8 +402,8 @@ with aba2:
             away = jogo["teams"]["away"]["name"]
             fixture_id = jogo["fixture"]["id"]
             
-            with st.expander(f"⚽ {home} x {away}"):
-    if st.button("Gerar Análise Real", key=f"pre_{fixture_id}"):
+        with st.expander(f"⚽ {home} x {away}"):
+            if st.button("Gerar Análise Real", key=f"pre_{fixture_id}"):
         with st.spinner("O Rei está estudando as equipes..."):
             # 1. Gera as instruções
             prompt_instrucoes = analisar_com_ia(f"Pré-jogo: {home} x {away}")
