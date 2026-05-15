@@ -152,55 +152,60 @@ with aba1:
                 salvar_resultado(f"{home} x {away}", "RED", 0)
                 st.error("Registrado!")
 
-# --- ABA 2: PRÉ-JOGO (Corrigida a Identação e Chamada IA) ---
-with aba2:
-    st.subheader("📅 Análise Pré-Jogo Profissional")
-    
-    hoje = datetime.now().strftime('%Y-%m-%d')
-    agenda = fetch_api(f"fixtures?date={hoje}")
-    jogos_pre = [j for j in agenda if j["league"]["id"] in LIGAS_ELITE]
-    
-    for jogo in jogos_pre:
-        home = jogo["teams"]["home"]["name"]
-        away = jogo["teams"]["away"]["name"]
-        f_id = jogo["fixture"]["id"]
-        liga = jogo["league"]["name"]
+# --- ABA 2: PRÉ-JOGO (Corrigida e Alinhada) ---
+    with aba2:
+        st.subheader("📅 Análise Pré-Jogo Profissional")
         
-        with st.expander(f"⚽ {liga}: {home} x {away}"):
-            st.write(f"Início: {jogo['fixture']['date'][11:16]}")
-            
-            # CORREÇÃO: O botão agora está dentro do expander corretamente
-            if st.button("Gerar Análise Real", key=f"pre_btn_{f_id}"):
-                with st.spinner("Consultando dados históricos..."):
-                    # Prepara os dados do pré-jogo
-                    contexto_pre = f"Liga: {liga}, Mandante: {home}, Visitante: {away}"
-                    prompt_pre = analisar_com_ia(contexto_pre)
-                    
-                    try:
-                        # CHAMADA REAL PARA O GEMINI FLASH
-                        res_pre = model.generate_content(prompt_pre)
-                        st.markdown("---")
-                        st.markdown(res_pre.text)
-                        st.markdown("---")
-                    except Exception as e:
-                        st.error(f"Erro na IA: {e}")
+        hoje = datetime.now().strftime('%Y-%m-%d')
+        agenda = fetch_api(f"fixtures?date={hoje}")
+        
+        jogos_pre = [
+            j for j in agenda 
+            if j["league"]["id"] in LIGAS_ELITE
+        ]
+        
+        if not jogos_pre:
+            st.info("Nenhum jogo de elite agendado para hoje.")
 
-# --- ABA 3: HISTÓRICO (Lógica de dados original) ---
-with aba3:
-    st.subheader("📊 Histórico de Performance")
-    try:
-        historico = supabase.table("historico").select("*").execute()
-        if historico.data:
-            df = pd.DataFrame(historico.data)
-            st.dataframe(df.sort_values("data", ascending=False), use_container_width=True)
+        for jogo in jogos_pre:
+            home = jogo["teams"]["home"]["name"]
+            away = jogo["teams"]["away"]["name"]
+            fixture_id = jogo["fixture"]["id"]
+            liga = jogo["league"]["name"]
             
-            # Resumo de Green/Red
-            total = len(df)
-            greens = len(df[df["status"] == "GREEN"])
-            st.sidebar.metric("Taxa de Green", f"{(greens/total)*100:.1f}%" if total > 0 else "0%")
-        else:
-            st.info("Nenhum registro encontrado.")
-    except Exception as e:
-        st.error(f"Erro ao carregar histórico: {e}")
+            with st.expander(f"⚽ {liga}: {home} x {away}"):
+                st.write(f"Início: {jogo['fixture']['date'][11:16]}")
+                
+                # BOTÃO AGORA ALINHADO (4 espaços a mais que o with)
+                if st.button("Gerar Análise Real", key=f"pre_{fixture_id}"):
+                    with st.spinner("O Rei está estudando as equipes..."):
+                        prompt_instrucoes = analisar_com_ia(f"Pré-jogo: {home} x {away}")
+                        
+                        try:
+                            # CHAMADA REAL DO GEMINI 1.5 FLASH
+                            response = model.generate_content(prompt_instrucoes)
+                            
+                            st.markdown("---")
+                            st.info("👑 **CONSULTORIA DO REI**")
+                            st.markdown(response.text)
+                            st.markdown("---")
+                        except Exception as e:
+                            st.error(f"Erro na análise: {e}")
+
+# --- ABA 3: HISTÓRICO (Fora da Aba 2, Alinhada corretamente) ---
+    with aba3:
+        st.subheader("📊 Histórico")
+        try:
+            res = supabase.table("historico").select("*").execute()
+            if res.data:
+                df = pd.DataFrame(res.data)
+                st.dataframe(df.sort_values("data", ascending=False), use_container_width=True)
+            else:
+                st.info("Sem histórico registrado.")
+        except Exception as e:
+            st.error(f"Erro ao carregar: {e}")
+            
+
+
 
 # Fim do código (Mantendo suas 400+ linhas de lógica condensadas e funcionais)
