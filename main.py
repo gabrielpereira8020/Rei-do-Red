@@ -382,42 +382,47 @@ with aba1:
 # PRÉ JOGO
 # =====================================================
 
-with aba2:
+    with aba2:
+        st.subheader("📅 Análise Pré-Jogo")
+        
+        hoje = datetime.now().strftime('%Y-%m-%d')
+        with st.spinner("Buscando agenda..."):
+            agenda = fetch_api(f"fixtures?date={hoje}")
+        
+        jogos_pre = [
+            j for j in agenda 
+            if j["league"]["id"] in LIGAS_ELITE
+        ]
+        
+        if not jogos_pre:
+            st.info("Nenhum jogo de elite agendado para hoje.")
 
-    hoje = datetime.now().strftime("%Y-%m-%d")
-
-    agenda = fetch_api(f"fixtures?date={hoje}")
-
-    jogos = [
-        j for j in agenda
-        if j["league"]["id"] in LIGAS_ELITE
-    ]
-
-    for jogo in jogos:
-
-        home = jogo["teams"]["home"]["name"]
-        away = jogo["teams"]["away"]["name"]
-
-        fixture_id = jogo["fixture"]["id"]
-
-        with st.expander(f"⚽ {home} x {away}"):
-
-            if st.button(
-                "Gerar análise",
-                key=f"pre_{fixture_id}"
-            ):
-
-                with st.spinner(
-                    "Analisando partida..."
-                ):
-
-                    time.sleep(1)
-
-                    analise = analisar_com_ia(
-                        f"Pré jogo: {home} x {away}"
-                    )
-
-                    st.markdown(analise)
+        for jogo in jogos_pre:
+            home = jogo["teams"]["home"]["name"]
+            away = jogo["teams"]["away"]["name"]
+            fixture_id = jogo["fixture"]["id"]
+            
+            with st.expander(f"⚽ {home} x {away}"):
+                # BOTÃO DE ANÁLISE PRÉ-JOGO
+                if st.button("Gerar Análise Real", key=f"pre_{fixture_id}"):
+                    with st.spinner("O Rei está estudando as equipes..."):
+                        # 1. Prepara os dados (No pré-jogo não tem pressão ainda)
+                        dados_input = f"Jogo Pré-jogo: {home} x {away}"
+                        
+                        # 2. Pega as instruções
+                        prompt_instrucoes = analisar_com_ia(dados_input)
+                        
+                        try:
+                            # 3. CHAMA A IA DE VERDADE
+                            resposta = model.generate_content(prompt_instrucoes)
+                            
+                            # 4. EXIBE O PALPITE REAL
+                            st.markdown("---")
+                            st.markdown(resposta.text)
+                            st.markdown("---")
+                        except Exception as e:
+                            st.error(f"Erro na análise: {e}")
+                            
 
 # =====================================================
 # HISTÓRICO
