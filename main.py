@@ -317,7 +317,7 @@ aba1, aba2, aba3 = st.tabs([
 # AO VIVO
 # =====================================================
 
-with aba1:
+    with aba1:
         st.subheader("🎯 Radar ao Vivo")
         
         jogos = fetch_api("fixtures?live=all")
@@ -325,6 +325,7 @@ with aba1:
         
         if not elite:
             st.info("Buscando jogos de elite...")
+            
         for jogo in elite:
             fixture_id = jogo["fixture"]["id"]
             home = jogo["teams"]["home"]["name"]
@@ -339,34 +340,41 @@ with aba1:
                 col2.metric("Placar", f"{gols_home}-{gols_away}")
                 col3.metric("Visitante", away)
                 
-                # BOTAO CONSULTAR IA
+                # BOTÃO DE CONSULTA
                 if st.button("Consultar IA", key=f"live_{fixture_id}"):
-                    with st.spinner("O Rei está analisando..."):
+                    with st.spinner("O Rei está analisando o campo..."):
+                        # 1. Pega os dados reais da API
                         stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
                         pressao = calcular_pressao(stats)
                         
-                        dados_brutos = f"Jogo: {home} x {away}, Stats: {stats}"
+                        # 2. Prepara o pacote de dados
+                        dados_brutos = f"Jogo: {home} x {away}, Minuto: {tempo}, Pressão: {pressao}, Stats: {stats}"
+                        
+                        # 3. Pega as instruções (Prompt)
                         instrucoes = analisar_com_ia(dados_brutos)
                         
                         try:
-                            # ENVIA E RECEBE A RESPOSTA REAL
-                            response = model.generate_content(instrucoes)
+                            # 4. AQUI MORA O SEGREDO: Envia para o Google e recebe a resposta
+                            resultado_ia = model.generate_content(instrucoes)
+                            
+                            # 5. MOSTRA A RESPOSTA REAL (response.text)
                             st.markdown("---")
-                            st.markdown(response.text)
+                            st.markdown(resultado_ia.text) # <--- Mostra o palpite, não as instruções
                             st.markdown("---")
                             st.metric("🔥 Pressão Atual", pressao)
                         except Exception as e:
                             st.error(f"Erro na IA: {e}")
 
-                # BOTOES DE GREEN E RED
+                # BOTOES DE RESULTADO (Alinhados fora do IF da IA)
                 c1, c2 = st.columns(2)
                 if c1.button("✅ GREEN", key=f"green_{fixture_id}"):
                     salvar_resultado(f"{home} x {away}", "GREEN", 100)
-                    st.success("Salvo!")
+                    st.success("Registrado!")
                 
                 if c2.button("❌ RED", key=f"red_{fixture_id}"):
                     salvar_resultado(f"{home} x {away}", "RED", 0)
-                    st.error("Salvo!")
+                    st.error("Registrado!")
+                    
                     
                     
 
