@@ -263,7 +263,7 @@ Explicação: ...]
     contents=prompt
 )
 
-return resposta.text if resposta.text else "IA sem resposta"
+    return resposta.text if resposta.text else "IA sem resposta"
     except Exception as e:
         return f"ERRO DA IA: {str(e)}"
 
