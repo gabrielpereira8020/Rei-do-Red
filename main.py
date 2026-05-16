@@ -268,7 +268,7 @@ Explicação: ...]
     contents=prompt
 )
 
-texto = response.text if response.text else "IA sem resposta no momento."
+        texto = response.text if response.text else "IA sem resposta no momento."
         return texto
 
     except Exception as e:
@@ -319,7 +319,7 @@ Formato: CONFIANÇA: XX%]
     contents=prompt
 )
 
-texto = response.text if response.text else "IA sem resposta no momento."
+        texto = response.text if response.text else "IA sem resposta no momento."
         return texto
 
     except Exception as e:
