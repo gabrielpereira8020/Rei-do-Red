@@ -1,8 +1,7 @@
 streamlit
 requests
 pandas
-google-genai
+google-genai==1.13.0
 supabase
 plotly
 streamlit-autorefresh
-
