@@ -167,7 +167,6 @@ def init_services():
         st.error(f"Erro de conexão: {e}")
         return None, None
 
-
 supabase, gemini = init_services()
 API_KEY = st.secrets["API_KEY"]
 HEADERS = {
