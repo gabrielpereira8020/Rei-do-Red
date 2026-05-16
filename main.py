@@ -268,11 +268,12 @@ Explicação: ...]
     contents=prompt
 )
 
-texto = (response.text
-)
-st.write(texto)
+texto = response.text if response.text else "IA sem resposta no momento."
+        return texto
+
     except Exception as e:
-        return f"ERRO DA IA: {str(e)}"
+        # O bloco que FECHA o try e evita o SyntaxError
+        return f"Erro técnico na IA: {e}"
 
 # =====================================================
 # IA - AO VIVO (prompt focado em entrada)
@@ -318,11 +319,12 @@ Formato: CONFIANÇA: XX%]
     contents=prompt
 )
 
-texto = (response.text
-)
-st.write(texto)
+texto = response.text if response.text else "IA sem resposta no momento."
+        return texto
+
     except Exception as e:
-        return f"ERRO DA IA: {str(e)}"
+        # O bloco que FECHA o try e evita o SyntaxError
+        return f"Erro técnico na IA: {e}"
 
 # =====================================================
 # RENDERIZAR ANÁLISE FORMATADA
