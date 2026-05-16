@@ -263,7 +263,14 @@ Explicação: ...]
     contents=prompt
 )
 
-        return resposta.text if resposta.text else "IA sem resposta"
+        response = gemini.models.generate_content(
+    model="gemini-2.5-flash-lite",
+    contents=prompt
+)
+
+texto = response.text
+
+st.write(texto)
     except Exception as e:
         return f"ERRO DA IA: {str(e)}"
 
@@ -306,8 +313,14 @@ Formato: CONFIANÇA: XX%]
     contents=prompt
 )
 
-        return resposta.text if resposta.text else "IA sem resposta"
-        return "IA sem resposta"
+        response = gemini.models.generate_content(
+    model="gemini-2.5-flash-lite",
+    contents=prompt
+)
+
+texto = response.text
+
+st.write(texto)
     except Exception as e:
         return f"ERRO DA IA: {str(e)}"
 
