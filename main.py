@@ -5,7 +5,25 @@ import google.generativeai as genai
 from datetime import datetime
 from supabase import create_client
 import time
+import streamlit as st
+import google.generativeai as genai
 
+# CÓDIGO ESPIÃO: Para saber exatamente o que a IA quer
+st.sidebar.header("🔍 Diagnóstico do Rei")
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    
+    # Lista as ferramentas disponíveis
+    modelos = [m.name for m in genai.list_models()]
+    st.sidebar.write("✅ Modelos que sua chave aceita:")
+    st.sidebar.json(modelos)
+    
+    # Mostra a versão instalada
+    st.sidebar.write(f"📦 Versão da biblioteca: {genai.__version__}")
+
+except Exception as e:
+    st.sidebar.error(f"❌ Erro no diagnóstico: {e}")
+    
 # =====================================================
 # CONFIG
 # =====================================================
