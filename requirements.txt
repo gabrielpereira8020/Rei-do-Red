@@ -1,7 +1,5 @@
 streamlit
 requests
 pandas
-google-genai>=2.3.0
+google-generativeai
 supabase
-plotly
-streamlit-autorefresh
