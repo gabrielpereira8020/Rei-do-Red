@@ -276,12 +276,9 @@ Explicação: ...]
 🔥 FEELING:
 [Seu feeling como Rei da Bola — o "instinto" além dos números.]
 """
-        resposta = gemini.models.generate_content(
-    model="gemini-2.5-flash-lite",
-    contents=prompt
-)
 
-        response = gemini.models.generate_content(
+
+        response = genai.models.generate_content(
     model="gemini-2.5-flash-lite",
     contents=prompt
 )
@@ -327,12 +324,9 @@ Formato: CONFIANÇA: XX%]
 🔥 FEELING AO VIVO:
 [Seu instinto neste momento do jogo.]
 """
-        resposta = gemini.models.generate_content(
-    model="gemini-2.5-flash-lite",
-    contents=prompt
-)
+        
 
-        response = gemini.models.generate_content(
+        response = genai.models.generate_content(
     model="gemini-2.5-flash-lite",
     contents=prompt
 )
