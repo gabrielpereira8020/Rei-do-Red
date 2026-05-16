@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-import google.generativeai as genai
+from google import genai
 from datetime import datetime
 from supabase import create_client
 import time
@@ -53,7 +53,7 @@ div[data-testid="stSidebar"] { background-color: #111827; }
 LIGAS_ELITE = [71,72,73,39,40,140,141,78,79,135,136,61,62,94]
 
 # =====================================================
-# TELEGRAM — DEVE SER DEFINIDO ANTES DE USAR
+# TELEGRAM — definido antes de usar
 # =====================================================
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
@@ -65,17 +65,15 @@ TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 def init_services():
     try:
         supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-        # Força o modelo com maior quota: gemini-1.5-flash = 1500 req/dia grátis
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        return supabase, model
+        # Nova SDK oficial do Google
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        return supabase, client
     except Exception as e:
         return None, None
 
-supabase, gemini = init_services()
+supabase, gemini_client = init_services()
 
-if supabase is None or gemini is None:
+if supabase is None or gemini_client is None:
     st.error("❌ Erro ao conectar serviços. Verifique as secrets no Streamlit Cloud.")
     st.stop()
 
@@ -111,7 +109,7 @@ def enviar_telegram(msg):
         pass
 
 # =====================================================
-# IA — gemini-1.5-flash (1500 chamadas/dia grátis)
+# IA — nova SDK google-genai (1500 req/dia grátis)
 # =====================================================
 def analisar_com_ia(contexto):
     try:
@@ -128,10 +126,11 @@ FORMATO:
 📈 CONFIANÇA:
 💰 OPORTUNIDADE:
 """
-        resposta = gemini.generate_content(prompt)
-        if hasattr(resposta, "text"):
-            return resposta.text
-        return "IA sem resposta"
+        response = gemini_client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
+        return response.text
     except Exception as e:
         return f"ERRO REAL DA IA: {str(e)}"
 
@@ -189,9 +188,6 @@ def salvar_resultado(jogo, resultado, confianca):
 st.sidebar.title("🏆 REI DA BOLA")
 st.sidebar.markdown("Painel Premium")
 
-# =====================================================
-# HISTÓRICO (sidebar)
-# =====================================================
 greens = 0
 reds = 0
 winrate = 0
