@@ -1,35 +1,29 @@
 import streamlit as st
 import requests
 import pandas as pd
-import google.generativeai as genai
 from datetime import datetime
-from supabase import create_client
 import time
-import streamlit as st
-import google.generativeai as genai
+import re
 
-# CÓDIGO ESPIÃO: Para saber exatamente o que a IA quer
-st.sidebar.header("🔍 Diagnóstico do Rei")
+# Importacoes com tratamento de erro claro
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    
-    # Lista as ferramentas disponíveis
-    modelos = [m.name for m in genai.list_models()]
-    st.sidebar.write("✅ Modelos que sua chave aceita:")
-    st.sidebar.json(modelos)
-    
-    # Mostra a versão instalada
-    st.sidebar.write(f"📦 Versão da biblioteca: {genai.__version__}")
+    import google.generativeai as genai
+except ImportError:
+    st.error("Pacote google-generativeai nao instalado. Verifique o requirements.txt")
+    st.stop()
 
-except Exception as e:
-    st.sidebar.error(f"❌ Erro no diagnóstico: {e}")
-    
+try:
+    from supabase import create_client
+except ImportError:
+    st.error("Pacote supabase nao instalado. Verifique o requirements.txt")
+    st.stop()
+
 # =====================================================
 # CONFIG
 # =====================================================
 st.set_page_config(
     page_title="IA REI DA BOLA PRO",
-    page_icon="🏆",
+    page_icon="",
     layout="wide"
 )
 
@@ -62,8 +56,6 @@ h1, h2, h3 { color: white; }
     background: #121a2b;
 }
 div[data-testid="stSidebar"] { background-color: #111827; }
-
-/* Caixa de Cravo */
 .cravo-box {
     background: linear-gradient(135deg, #1a0a2e, #2d1b69);
     border: 2px solid #f59e0b;
@@ -72,8 +64,6 @@ div[data-testid="stSidebar"] { background-color: #111827; }
     margin: 10px 0;
 }
 .cravo-box h3 { color: #f59e0b !important; font-size: 1.4rem; }
-
-/* Caixa de Oportunidade */
 .oportunidade-box {
     background: linear-gradient(135deg, #0a1a0a, #1a3a1a);
     border: 2px solid #22c55e;
@@ -82,8 +72,6 @@ div[data-testid="stSidebar"] { background-color: #111827; }
     margin: 10px 0;
 }
 .oportunidade-box h3 { color: #22c55e !important; }
-
-/* Caixa de Confiança */
 .confianca-box {
     background: linear-gradient(135deg, #0a0a2e, #0a1a3a);
     border: 2px solid #38bdf8;
@@ -92,8 +80,6 @@ div[data-testid="stSidebar"] { background-color: #111827; }
     margin: 10px 0;
 }
 .confianca-box h3 { color: #38bdf8 !important; }
-
-/* Barra de confiança */
 .progress-bar {
     background: #1e293b;
     border-radius: 999px;
@@ -106,10 +92,7 @@ div[data-testid="stSidebar"] { background-color: #111827; }
     height: 100%;
     border-radius: 999px;
     background: linear-gradient(90deg, #38bdf8, #7a3cff);
-    transition: width 0.5s ease;
 }
-
-/* Caixa AO VIVO - entrada */
 .entrada-box {
     background: linear-gradient(135deg, #1a0a0a, #3a1a1a);
     border: 2px solid #ef4444;
@@ -118,8 +101,6 @@ div[data-testid="stSidebar"] { background-color: #111827; }
     margin: 10px 0;
 }
 .entrada-box h3 { color: #ef4444 !important; }
-
-/* API Counter */
 .api-counter {
     background: linear-gradient(135deg, #1a1a0a, #2a2a1a);
     border: 1px solid #eab308;
@@ -133,15 +114,17 @@ div[data-testid="stSidebar"] { background-color: #111827; }
 """, unsafe_allow_html=True)
 
 # =====================================================
-# LIGAS
+# LIGAS MONITORADAS
 # =====================================================
 LIGAS_ELITE = [71, 72, 73, 39, 40, 140, 141, 78, 79, 135, 136, 61, 62, 94]
 
 # =====================================================
-# CONTROLE DE CHAMADAS DE API (contador diário)
+# CONTADOR DE CHAMADAS DE API
 # =====================================================
+LIMITE_DIARIO_API = 100
+
 def get_api_usage_key():
-    return f"api_calls_{datetime.now().strftime('%Y-%m-%d')}"
+    return "api_calls_" + datetime.now().strftime("%Y-%m-%d")
 
 def registrar_chamada_api():
     key = get_api_usage_key()
@@ -153,10 +136,8 @@ def get_chamadas_hoje():
     key = get_api_usage_key()
     return st.session_state.get(key, 0)
 
-LIMITE_DIARIO_API = 100  # ajuste conforme seu plano
-
 # =====================================================
-# INIT SERVICES
+# INICIALIZAR SERVICOS
 # =====================================================
 @st.cache_resource
 def init_services():
@@ -166,69 +147,59 @@ def init_services():
             st.secrets["SUPABASE_KEY"]
         )
 
-        client = genai.Client(
-            api_key=st.secrets["GEMINI_API_KEY"]
-        )
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
         modelos_disponiveis = []
+        for m in genai.list_models():
+            if "generateContent" in m.supported_generation_methods:
+                modelos_disponiveis.append(m.name)
 
-        for m in client.models.list():
-            modelos_disponiveis.append(m.name)
-
-        modelo_escolhido = "gemini-2.5-flash-lite"
-
-        st.success(f"Modelo carregado: {modelo_escolhido}")
-
-        return supabase, client
+        if modelos_disponiveis:
+            escolhido = next(
+                (x for x in modelos_disponiveis if "flash" in x),
+                modelos_disponiveis[0]
+            )
+            model = genai.GenerativeModel(escolhido)
+            return supabase, model, escolhido
+        else:
+            return None, None, None
 
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
-        return None, None
+        st.error("Erro ao iniciar servicos: " + str(e))
+        return None, None, None
 
-supabase, gemini = init_services()
+supabase, gemini, modelo_nome = init_services()
+
 API_KEY = st.secrets["API_KEY"]
 HEADERS = {
-    'x-rapidapi-key': API_KEY,
-    'x-rapidapi-host': 'v3.football.api-sports.io'
+    "x-rapidapi-key": API_KEY,
+    "x-rapidapi-host": "v3.football.api-sports.io"
 }
 
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
+
 # =====================================================
-# API FOOTBALL
+# FUNCOES DE API FOOTBALL
 # =====================================================
 @st.cache_data(ttl=60)
 def fetch_api(endpoint):
     try:
-        url = f"https://v3.football.api-sports.io/{endpoint}"
+        url = "https://v3.football.api-sports.io/" + endpoint
         response = requests.get(url, headers=HEADERS, timeout=15)
         registrar_chamada_api()
         if response.status_code != 200:
             return []
         return response.json().get("response", [])
-    except:
+    except Exception:
         return []
-
-def fetch_api_com_status(endpoint):
-    """Busca e também retorna os headers de uso da API."""
-    try:
-        url = f"https://v3.football.api-sports.io/{endpoint}"
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        registrar_chamada_api()
-        remaining = response.headers.get("x-ratelimit-requests-remaining", None)
-        limit = response.headers.get("x-ratelimit-requests-limit", None)
-        data = response.json().get("response", []) if response.status_code == 200 else []
-        return data, remaining, limit
-    except:
-        return [], None, None
 
 # =====================================================
 # TELEGRAM
 # =====================================================
-TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
-TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
-
 def enviar_telegram(msg):
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        url = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage"
         payload = {
             "chat_id": TELEGRAM_CHAT_ID,
             "text": msg,
@@ -236,133 +207,97 @@ def enviar_telegram(msg):
         }
         r = requests.post(url, json=payload, timeout=10)
         return r.status_code == 200
-    except:
+    except Exception:
         return False
 
 # =====================================================
-# IA - PRÉ-JOGO (prompt detalhado)
+# IA - PRE-JOGO
 # =====================================================
 def analisar_pre_jogo(contexto):
+    if not gemini:
+        return "ERRO: IA nao inicializada. Verifique a chave GEMINI_API_KEY."
     try:
-        prompt = f"""
-Você é o REI DA BOLA — o maior analista de apostas esportivas do Brasil.
-Analise o jogo abaixo como um trader profissional com anos de experiência.
-
-CONTEXTO DO JOGO:
-{contexto}
-
-Retorne EXATAMENTE neste formato (sem markdown extra fora das seções):
-
-🎯 VEREDITO:
-[Dê sua opinião geral sobre o jogo. Quem tem vantagem e por quê.]
-
-🏆 CRAVO:
-[Aqui você coloca O SEU MELHOR PALPITE — aquilo que você CRAVO que vai acontecer.
-Seja específico: pode ser vitória de um time, placar, gols (over/under), escanteios,
-cartões, chutes, gol ou assistência de um jogador específico, falta sofrida, etc.
-Exemplo: "CRAVO vitória do Goiás. Meu pick principal: Over 1.5 gols. Apoio forte."]
-
-💰 OPORTUNIDADE:
-[Liste 2 a 3 mercados que têm valor mas você NÃO cravar com certeza.
-São oportunidades secundárias interessantes pelo contexto do jogo.
-Exemplo: escanteios acima de X, cartão para jogador Y, gol no segundo tempo.]
-
-📈 CONFIANÇA:
-[Dê uma porcentagem de 0% a 100% de confiança no seu CRAVO principal.
-Depois explique brevemente o motivo.
-Formato: CONFIANÇA: XX%
-Explicação: ...]
-
-🔥 FEELING:
-[Seu feeling como Rei da Bola — o "instinto" além dos números.]
-"""
-
-
-        response = genai.models.generate_content(
-    model="gemini-2.5-flash-lite",
-    contents=prompt
-)
-
-        texto = response.text if response.text else "IA sem resposta no momento."
-        return texto
-
+        prompt = (
+            "Voce e o REI DA BOLA, o maior analista de apostas esportivas do Brasil.\n"
+            "Analise o jogo abaixo como trader profissional.\n\n"
+            "CONTEXTO DO JOGO:\n"
+            + contexto +
+            "\n\nRetorne EXATAMENTE neste formato:\n\n"
+            "VEREDITO:\n"
+            "[Opiniao geral sobre o jogo. Quem tem vantagem e por que.]\n\n"
+            "CRAVO:\n"
+            "[SEU MELHOR PALPITE que voce CRAVO. Seja especifico: vitoria, placar, "
+            "gols over/under, escanteios, cartoes, gol de jogador, falta sofrida, etc. "
+            "Exemplo: CRAVO vitoria do time X. Pick principal: Over 1.5 gols.]\n\n"
+            "OPORTUNIDADE:\n"
+            "[2 a 3 mercados secundarios com valor mas sem certeza total. "
+            "Ex: escanteios acima de X, cartao para jogador Y, gol no segundo tempo.]\n\n"
+            "CONFIANCA:\n"
+            "[Porcentagem de 0 a 100 de confianca no CRAVO. "
+            "Formato: CONFIANCA: XX% | Motivo: explicacao curta.]\n\n"
+            "FEELING:\n"
+            "[Seu instinto alem dos numeros como Rei da Bola.]"
+        )
+        resposta = gemini.generate_content(prompt)
+        if hasattr(resposta, "text"):
+            return resposta.text
+        return "IA sem resposta"
     except Exception as e:
-        # O bloco que FECHA o try e evita o SyntaxError
-        return f"Erro técnico na IA: {e}"
+        return "ERRO DA IA: " + str(e)
 
 # =====================================================
-# IA - AO VIVO (prompt focado em entrada)
+# IA - AO VIVO
 # =====================================================
 def analisar_ao_vivo(contexto_ao_vivo):
+    if not gemini:
+        return "ERRO: IA nao inicializada. Verifique a chave GEMINI_API_KEY."
     try:
-        prompt = f"""
-Você é o REI DA BOLA — especialista em trading ao vivo.
-Analise o momento atual do jogo e diga O QUE FAZER AGORA.
-
-CONTEXTO AO VIVO:
-{contexto_ao_vivo}
-
-Retorne EXATAMENTE neste formato:
-
-⚡ ENTRADA RECOMENDADA:
-[Diga claramente: PODE ENTRAR AGORA em [mercado específico]?
-Seja direto: entrar em vitória, empate, gols, escanteios, cartões, etc.
-Se o jogo está movimentado, diga em qual mercado entrar agora.
-Exemplo: "ENTRA AGORA — Over 2.5 gols. Jogo aberto, placar 1x1, muita pressão."]
-
-🎯 CRAVO AO VIVO:
-[Seu melhor palpite para os próximos minutos ou para o resultado final.
-Pode ser: virada, mais um gol, escanteio, cartão, chute a gol de alguém.]
-
-📈 CONFIANÇA:
-[Porcentagem de confiança na entrada recomendada.
-Formato: CONFIANÇA: XX%]
-
-⚠️ RISCOS:
-[Aponte 1 ou 2 riscos principais desta entrada.]
-
-🔥 FEELING AO VIVO:
-[Seu instinto neste momento do jogo.]
-"""
-        
-
-        response = genai.models.generate_content(
-    model="gemini-2.5-flash-lite",
-    contents=prompt
-)
-
-        texto = response.text if response.text else "IA sem resposta no momento."
-        return texto
-
+        prompt = (
+            "Voce e o REI DA BOLA, especialista em trading ao vivo.\n"
+            "Analise o momento atual do jogo e diga O QUE FAZER AGORA.\n\n"
+            "CONTEXTO AO VIVO:\n"
+            + contexto_ao_vivo +
+            "\n\nRetorne EXATAMENTE neste formato:\n\n"
+            "ENTRADA RECOMENDADA:\n"
+            "[PODE ENTRAR AGORA em qual mercado? Seja direto: vitoria, empate, gols, "
+            "escanteios, cartoes. Ex: ENTRA AGORA em Over 2.5 gols. Jogo aberto, muito movimento.]\n\n"
+            "CRAVO AO VIVO:\n"
+            "[Melhor palpite para os proximos minutos ou resultado final. "
+            "Pode ser virada, mais um gol, escanteio, cartao, chute a gol.]\n\n"
+            "CONFIANCA:\n"
+            "[Porcentagem de confianca. Formato: CONFIANCA: XX%]\n\n"
+            "RISCOS:\n"
+            "[1 ou 2 riscos principais desta entrada.]\n\n"
+            "FEELING AO VIVO:\n"
+            "[Seu instinto neste momento do jogo.]"
+        )
+        resposta = gemini.generate_content(prompt)
+        if hasattr(resposta, "text"):
+            return resposta.text
+        return "IA sem resposta"
     except Exception as e:
-        # O bloco que FECHA o try e evita o SyntaxError
-        return f"Erro técnico na IA: {e}"
+        return "ERRO DA IA: " + str(e)
 
 # =====================================================
-# RENDERIZAR ANÁLISE FORMATADA
+# RENDERIZAR ANALISE COM CAIXAS VISUAIS
 # =====================================================
-def renderizar_analise(texto, modo="pre"):
-    """
-    Renderiza a análise da IA em caixas visuais formatadas.
-    modo: 'pre' para pré-jogo, 'live' para ao vivo.
-    """
+def renderizar_analise(texto):
     if not texto or texto.startswith("ERRO"):
         st.error(texto)
         return
 
-    secoes = {
-        "🎯 VEREDITO": ("", "#7a3cff"),
-        "🏆 CRAVO": ("cravo-box", "#f59e0b"),
-        "⚡ ENTRADA RECOMENDADA": ("entrada-box", "#ef4444"),
-        "🎯 CRAVO AO VIVO": ("cravo-box", "#f59e0b"),
-        "💰 OPORTUNIDADE": ("oportunidade-box", "#22c55e"),
-        "📈 CONFIANÇA": ("confianca-box", "#38bdf8"),
-        "🔥 FEELING": ("", "#a78bfa"),
-        "🔥 FEELING AO VIVO": ("", "#a78bfa"),
-        "⚠️ RISCOS": ("", "#f87171"),
+    mapa_secoes = {
+        "VEREDITO": ("", "#7a3cff"),
+        "CRAVO": ("cravo-box", "#f59e0b"),
+        "ENTRADA RECOMENDADA": ("entrada-box", "#ef4444"),
+        "CRAVO AO VIVO": ("cravo-box", "#f59e0b"),
+        "OPORTUNIDADE": ("oportunidade-box", "#22c55e"),
+        "CONFIANCA": ("confianca-box", "#38bdf8"),
+        "FEELING": ("", "#a78bfa"),
+        "FEELING AO VIVO": ("", "#a78bfa"),
+        "RISCOS": ("", "#f87171"),
     }
 
-    # Parse por seção
     linhas = texto.split("\n")
     secao_atual = None
     conteudo_atual = []
@@ -371,55 +306,63 @@ def renderizar_analise(texto, modo="pre"):
     for linha in linhas:
         linha_strip = linha.strip()
         encontrou = False
-        for chave in secoes:
-            if linha_strip.startswith(chave):
+        for chave in mapa_secoes:
+            if linha_strip.upper().startswith(chave + ":") or linha_strip.upper() == chave + ":":
                 if secao_atual:
                     blocos.append((secao_atual, "\n".join(conteudo_atual).strip()))
                 secao_atual = chave
-                conteudo_atual = [linha_strip[len(chave):].lstrip(":").strip()]
+                resto = linha_strip[len(chave):].lstrip(":").strip()
+                conteudo_atual = [resto] if resto else []
                 encontrou = True
                 break
-        if not encontrou and secao_atual:
+        if not encontrou and secao_atual is not None:
             conteudo_atual.append(linha)
 
     if secao_atual:
         blocos.append((secao_atual, "\n".join(conteudo_atual).strip()))
 
-    # Renderizar blocos
-    for titulo, conteudo in blocos:
-        css_class, cor = secoes.get(titulo, ("", "#fff"))
+    if not blocos:
+        st.markdown(texto)
+        return
 
-        # Extrai % de confiança se for seção de confiança
-        if "CONFIANÇA" in titulo and "%" in conteudo:
-            import re
+    for titulo, conteudo in blocos:
+        css_class, cor = mapa_secoes.get(titulo, ("", "#fff"))
+
+        if "CONFIANCA" in titulo and "%" in conteudo:
             match = re.search(r"(\d+)%", conteudo)
             pct = int(match.group(1)) if match else 0
-
-            st.markdown(f"""
-            <div class="confianca-box">
-                <h3>{titulo}</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width:{pct}%"></div>
-                </div>
-                <p style="color:#38bdf8; font-size:1.3rem; font-weight:bold; margin-top:8px;">{pct}%</p>
-                <p style="color:#94a3b8;">{conteudo.replace(f"CONFIANÇA: {pct}%", "").strip()}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
+            explicacao = conteudo.replace("CONFIANCA: " + str(pct) + "%", "").replace("Motivo:", "").strip()
+            st.markdown(
+                "<div class='confianca-box'>"
+                "<h3>CONFIANCA</h3>"
+                "<div class='progress-bar'>"
+                "<div class='progress-fill' style='width:" + str(pct) + "%'></div>"
+                "</div>"
+                "<p style='color:#38bdf8;font-size:1.3rem;font-weight:bold;margin-top:8px;'>"
+                + str(pct) + "%</p>"
+                "<p style='color:#94a3b8;'>" + explicacao + "</p>"
+                "</div>",
+                unsafe_allow_html=True
+            )
         elif css_class:
-            st.markdown(f"""
-            <div class="{css_class}">
-                <h3>{titulo}</h3>
-                <p style="color:#e2e8f0; line-height:1.7; white-space:pre-line;">{conteudo}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
+            st.markdown(
+                "<div class='" + css_class + "'>"
+                "<h3>" + titulo + "</h3>"
+                "<p style='color:#e2e8f0;line-height:1.7;white-space:pre-line;'>"
+                + conteudo + "</p>"
+                "</div>",
+                unsafe_allow_html=True
+            )
         else:
-            st.markdown(f"**{titulo}**")
-            st.markdown(f"<p style='color:#cbd5e1; line-height:1.7; white-space:pre-line;'>{conteudo}</p>", unsafe_allow_html=True)
+            st.markdown("**" + titulo + "**")
+            st.markdown(
+                "<p style='color:#cbd5e1;line-height:1.7;white-space:pre-line;'>"
+                + conteudo + "</p>",
+                unsafe_allow_html=True
+            )
 
 # =====================================================
-# PRESSÃO
+# CALCULAR PRESSAO
 # =====================================================
 def calcular_pressao(stats):
     if not stats or len(stats) < 2:
@@ -433,7 +376,7 @@ def calcular_pressao(stats):
                     return 0
                 try:
                     return int(str(valor).replace("%", ""))
-                except:
+                except Exception:
                     return 0
         return 0
 
@@ -452,9 +395,8 @@ def calcular_pressao(stats):
     return max(pontos_home, pontos_away)
 
 def descrever_stats(stats):
-    """Converte as stats em texto para o contexto da IA."""
     if not stats or len(stats) < 2:
-        return "Estatísticas indisponíveis."
+        return "Estatisticas indisponiveis."
 
     def pegar(stats_list, nome):
         for item in stats_list:
@@ -469,16 +411,25 @@ def descrever_stats(stats):
     time_away = stats[1].get("team", {}).get("name", "Fora")
 
     return (
-        f"{time_home}: Chutes {pegar(home,'Total Shots')}, No gol {pegar(home,'Shots on Goal')}, "
-        f"Escanteios {pegar(home,'Corner Kicks')}, Posse {pegar(home,'Ball Possession')}%, "
-        f"Faltas {pegar(home,'Fouls')}, Cartões A {pegar(home,'Yellow Cards')}/V {pegar(home,'Red Cards')} | "
-        f"{time_away}: Chutes {pegar(away,'Total Shots')}, No gol {pegar(away,'Shots on Goal')}, "
-        f"Escanteios {pegar(away,'Corner Kicks')}, Posse {pegar(away,'Ball Possession')}%, "
-        f"Faltas {pegar(away,'Fouls')}, Cartões A {pegar(away,'Yellow Cards')}/V {pegar(away,'Red Cards')}"
+        time_home + ": Chutes " + str(pegar(home, "Total Shots")) +
+        ", No gol " + str(pegar(home, "Shots on Goal")) +
+        ", Escanteios " + str(pegar(home, "Corner Kicks")) +
+        ", Posse " + str(pegar(home, "Ball Possession")) + "%" +
+        ", Faltas " + str(pegar(home, "Fouls")) +
+        ", Cartoes A" + str(pegar(home, "Yellow Cards")) +
+        "/V" + str(pegar(home, "Red Cards")) +
+        " | " +
+        time_away + ": Chutes " + str(pegar(away, "Total Shots")) +
+        ", No gol " + str(pegar(away, "Shots on Goal")) +
+        ", Escanteios " + str(pegar(away, "Corner Kicks")) +
+        ", Posse " + str(pegar(away, "Ball Possession")) + "%" +
+        ", Faltas " + str(pegar(away, "Fouls")) +
+        ", Cartoes A" + str(pegar(away, "Yellow Cards")) +
+        "/V" + str(pegar(away, "Red Cards"))
     )
 
 # =====================================================
-# BANCO
+# SALVAR RESULTADO
 # =====================================================
 def salvar_resultado(jogo, resultado, confianca):
     try:
@@ -488,97 +439,93 @@ def salvar_resultado(jogo, resultado, confianca):
             "resultado": resultado,
             "confianca": confianca
         }).execute()
-        st.success(f"✅ {resultado} registrado com sucesso!")
+        st.success(resultado + " registrado com sucesso!")
     except Exception as e:
-        st.error(f"Erro ao salvar: {e}")
+        st.error("Erro ao salvar: " + str(e))
 
 # =====================================================
 # SIDEBAR
 # =====================================================
-st.sidebar.title("🏆 REI DA BOLA")
+st.sidebar.title("REI DA BOLA")
 st.sidebar.markdown("**Painel Premium**")
+if modelo_nome:
+    st.sidebar.caption("Modelo: " + modelo_nome)
 st.sidebar.markdown("---")
 
-# ---- CONTADOR DE API ----
-st.sidebar.markdown("### 🔑 Uso da API Hoje")
+# Contador de API
+st.sidebar.markdown("### Uso da API Hoje")
 chamadas_hoje = get_chamadas_hoje()
 restantes = max(0, LIMITE_DIARIO_API - chamadas_hoje)
 pct_uso = min(100, int((chamadas_hoje / LIMITE_DIARIO_API) * 100))
 
-st.sidebar.markdown(f"""
-<div class="api-counter">
-    <span>⚡ {restantes} chamadas restantes</span><br>
-    <small style="color:#94a3b8;">Usadas: {chamadas_hoje} / {LIMITE_DIARIO_API}</small>
-    <div class="progress-bar" style="margin-top:6px;">
-        <div class="progress-fill" style="width:{pct_uso}%; background: linear-gradient(90deg,#22c55e,#ef4444);"></div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
+st.sidebar.markdown(
+    "<div class='api-counter'>"
+    "<span>" + str(restantes) + " chamadas restantes</span><br>"
+    "<small style='color:#94a3b8;'>Usadas: " + str(chamadas_hoje) + " / " + str(LIMITE_DIARIO_API) + "</small>"
+    "<div class='progress-bar' style='margin-top:6px;'>"
+    "<div class='progress-fill' style='width:" + str(pct_uso) + "%;background:linear-gradient(90deg,#22c55e,#ef4444);'></div>"
+    "</div>"
+    "</div>",
+    unsafe_allow_html=True
+)
 st.sidebar.markdown("---")
 
-# ---- HISTÓRICO ----
+# Historico sidebar
 greens = 0
 reds = 0
 winrate = 0
 try:
-    historico = supabase.table("historico").select("*").execute()
-    if historico.data:
-        df_hist = pd.DataFrame(historico.data)
+    historico_data = supabase.table("historico").select("*").execute()
+    if historico_data.data:
+        df_hist = pd.DataFrame(historico_data.data)
         greens = len(df_hist[df_hist["resultado"] == "GREEN"])
         reds = len(df_hist[df_hist["resultado"] == "RED"])
         total = greens + reds
         if total > 0:
             winrate = round((greens / total) * 100, 1)
-except:
+except Exception:
     pass
 
-st.sidebar.metric("✅ Greens", greens)
-st.sidebar.metric("❌ Reds", reds)
-st.sidebar.metric("📈 Winrate", f"{winrate}%")
+st.sidebar.metric("Greens", greens)
+st.sidebar.metric("Reds", reds)
+st.sidebar.metric("Winrate", str(winrate) + "%")
 
-# ---- TESTE TELEGRAM ----
 st.sidebar.markdown("---")
 if st.sidebar.button("Testar Telegram"):
     ok = enviar_telegram("<b>REI DA BOLA</b> - Telegram funcionando!")
     if ok:
         st.sidebar.success("Telegram OK!")
     else:
-        st.sidebar.error("Falha no Telegram. Verifique TOKEN e CHAT_ID.")
+        st.sidebar.error("Falha. Verifique TOKEN e CHAT_ID.")
 
 # =====================================================
 # HEADER
 # =====================================================
-st.title("🏆 IA REI DA BOLA PRO")
+st.title("IA REI DA BOLA PRO")
 st.caption("Radar inteligente para traders esportivos")
 
 # =====================================================
 # TABS
 # =====================================================
-aba1, aba2, aba3 = st.tabs([
-    "🎯 AO VIVO",
-    "🔮 PRÉ-JOGO",
-    "📊 HISTÓRICO"
-])
+aba1, aba2, aba3 = st.tabs(["AO VIVO", "PRE-JOGO", "HISTORICO"])
 
 # =====================================================
 # ABA 1 - AO VIVO
 # =====================================================
 with aba1:
-    st.subheader("🎯 Radar ao Vivo")
+    st.subheader("Radar ao Vivo")
 
-    col_refresh, col_info = st.columns([1, 3])
-    with col_refresh:
-        atualizar = st.button("🔄 Atualizar jogos")
+    if st.button("Atualizar jogos"):
+        st.cache_data.clear()
 
     with st.spinner("Buscando jogos ao vivo..."):
         jogos_live = fetch_api("fixtures?live=all")
         elite_live = [j for j in jogos_live if j["league"]["id"] in LIGAS_ELITE]
 
     if not elite_live:
-        st.info("⏳ Nenhum jogo ao vivo nas ligas monitoradas no momento.")
+        st.info("Nenhum jogo ao vivo nas ligas monitoradas no momento.")
     else:
-        st.success(f"✅ {len(elite_live)} jogo(s) ao vivo encontrado(s)")
+        st.success(str(len(elite_live)) + " jogo(s) ao vivo encontrado(s)")
 
     for jogo in elite_live:
         fixture_id = jogo["fixture"]["id"]
@@ -589,45 +536,38 @@ with aba1:
         tempo = jogo["fixture"]["status"]["elapsed"] or "?"
         liga = jogo["league"]["name"]
 
-        with st.expander(f"⏱️ {tempo}' | {liga} | {home} {gols_home}x{gols_away} {away}"):
+        with st.expander(str(tempo) + "' | " + liga + " | " + home + " " + str(gols_home) + "x" + str(gols_away) + " " + away):
             col1, col2, col3 = st.columns(3)
-            col1.metric("🏠 Mandante", home)
-            col2.metric("⚽ Placar", f"{gols_home} - {gols_away}")
-            col3.metric("✈️ Visitante", away)
+            col1.metric("Mandante", home)
+            col2.metric("Placar", str(gols_home) + " - " + str(gols_away))
+            col3.metric("Visitante", away)
 
-            if st.button("🤖 Consultar IA ao Vivo", key=f"live_{fixture_id}"):
+            if st.button("Consultar IA ao Vivo", key="live_" + str(fixture_id)):
                 with st.spinner("Analisando jogo ao vivo..."):
-                    stats = fetch_api(f"fixtures/statistics?fixture={fixture_id}")
+                    stats = fetch_api("fixtures/statistics?fixture=" + str(fixture_id))
                     pressao = calcular_pressao(stats)
                     stats_texto = descrever_stats(stats)
 
                     contexto_ao_vivo = (
-                        f"Jogo: {home} x {away}\n"
-                        f"Minuto: {tempo}'\n"
-                        f"Placar: {home} {gols_home} x {gols_away} {away}\n"
-                        f"Liga: {liga}\n"
-                        f"Índice de Pressão: {pressao}\n"
-                        f"Estatísticas: {stats_texto}"
+                        "Jogo: " + home + " x " + away + "\n"
+                        "Minuto: " + str(tempo) + "\n"
+                        "Placar: " + home + " " + str(gols_home) + " x " + str(gols_away) + " " + away + "\n"
+                        "Liga: " + liga + "\n"
+                        "Indice de Pressao: " + str(pressao) + "\n"
+                        "Estatisticas: " + stats_texto
                     )
 
-                    col_p1, col_p2 = st.columns(2)
-                    col_p1.metric("🔥 Pressão", pressao)
+                    st.metric("Pressao", pressao)
 
                     analise = analisar_ao_vivo(contexto_ao_vivo)
-                    renderizar_analise(analise, modo="live")
+                    renderizar_analise(analise)
 
-                    # Enviar ao Telegram
                     msg_telegram = (
-                        f"🎯 <b>AO VIVO — REI DA BOLA</b>\n\n"
-                        f"⏱️ {tempo}' | {home} {gols_home}x{gols_away} {away}\n"
-                        f"Liga: {liga}\n"
-                        f"Pressão: {pressao}\n\n"
-                        f"{analise[:1000]}"
+                        "<b>AO VIVO - REI DA BOLA</b>\n\n"
+                        + str(tempo) + "' | " + home + " " + str(gols_home) + "x" + str(gols_away) + " " + away + "\n"
+                        "Liga: " + liga + "\n"
+                        "Pressao: " + str(pressao) + "\n\n"
+                        + analise[:1000]
                     )
                     ok = enviar_telegram(msg_telegram)
-                    if ok:
-                        st.success("Sinal enviado ao Telegram!")
-                    else:
-                        st.warning("Analise gerada mas Telegram falhou. Verifique TOKEN/CHAT_ID.")
-
- 
+            
