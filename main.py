@@ -143,27 +143,32 @@ LIMITE_DIARIO_API = 100  # ajuste conforme seu plano
 @st.cache_resource
 def init_services():
     try:
-        supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        supabase = create_client(
+            st.secrets["SUPABASE_URL"],
+            st.secrets["SUPABASE_KEY"]
+        )
+
+        client = genai.Client(
+            api_key=st.secrets["GEMINI_API_KEY"]
+        )
 
         modelos_disponiveis = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                modelos_disponiveis.append(m.name)
 
-        if modelos_disponiveis:
-            escolhido = next((x for x in modelos_disponiveis if 'flash' in x), modelos_disponiveis[0])
-            model = genai.GenerativeModel(escolhido)
-            return supabase, model
-        else:
-            st.error("Nenhum modelo disponível encontrado para esta chave.")
-            return None, None
+        for m in client.models.list():
+            modelos_disponiveis.append(m.name)
+
+        modelo_escolhido = "gemini-2.5-flash-lite"
+
+        st.success(f"Modelo carregado: {modelo_escolhido}")
+
+        return supabase, client
+
     except Exception as e:
         st.error(f"Erro de conexão: {e}")
         return None, None
 
-supabase, gemini = init_services()
 
+supabase, gemini = init_services()
 API_KEY = st.secrets["API_KEY"]
 HEADERS = {
     'x-rapidapi-key': API_KEY,
@@ -254,10 +259,12 @@ Explicação: ...]
 🔥 FEELING:
 [Seu feeling como Rei da Bola — o "instinto" além dos números.]
 """
-        resposta = gemini.generate_content(prompt)
-        if hasattr(resposta, "text"):
-            return resposta.text
-        return "IA sem resposta"
+        resposta = gemini.models.generate_content(
+    model="gemini-2.5-flash-lite",
+    contents=prompt
+)
+
+return resposta.text if resposta.text else "IA sem resposta"
     except Exception as e:
         return f"ERRO DA IA: {str(e)}"
 
@@ -295,9 +302,12 @@ Formato: CONFIANÇA: XX%]
 🔥 FEELING AO VIVO:
 [Seu instinto neste momento do jogo.]
 """
-        resposta = gemini.generate_content(prompt)
-        if hasattr(resposta, "text"):
-            return resposta.text
+        resposta = gemini.models.generate_content(
+    model="gemini-2.5-flash-lite",
+    contents=prompt
+)
+
+return resposta.text if resposta.text else "IA sem resposta"
         return "IA sem resposta"
     except Exception as e:
         return f"ERRO DA IA: {str(e)}"
