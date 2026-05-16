@@ -68,7 +68,7 @@ def init_services():
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
         # Força o modelo com maior quota: gemini-1.5-flash = 1500 req/dia grátis
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash")
         return supabase, model
     except Exception as e:
         return None, None
