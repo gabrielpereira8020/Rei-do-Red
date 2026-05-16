@@ -503,8 +503,8 @@ st.sidebar.metric("📈 Winrate", f"{winrate}%")
 
 # ---- TESTE TELEGRAM ----
 st.sidebar.markdown("---")
-if st.sidebar.button("📨 Testar Telegram"):
-    ok = enviar_telegram("🏆 <b>REI DA BOLA</b> — Telegram funcionando! ✅")
+if st.sidebar.button("Testar Telegram"):
+    ok = enviar_telegram("<b>REI DA BOLA</b> - Telegram funcionando!")
     if ok:
         st.sidebar.success("Telegram OK!")
     else:
@@ -590,6 +590,8 @@ with aba1:
                     )
                     ok = enviar_telegram(msg_telegram)
                     if ok:
-                        st.success("📨 Sinal enviado ao Telegram!")
+                        st.success("Sinal enviado ao Telegram!")
                     else:
-                        st.warning("⚠️ Análise gerada mas Telegram falhou. Verifique TOKEN
+                        st.warning("Analise gerada mas Telegram falhou. Verifique TOKEN/CHAT_ID.")
+
+ 
