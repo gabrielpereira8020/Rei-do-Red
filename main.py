@@ -268,8 +268,8 @@ Explicação: ...]
     contents=prompt
 )
 
-texto = response.text
-
+texto = (response.text
+)
 st.write(texto)
     except Exception as e:
         return f"ERRO DA IA: {str(e)}"
@@ -318,8 +318,8 @@ Formato: CONFIANÇA: XX%]
     contents=prompt
 )
 
-texto = response.text
-
+texto = (response.text
+)
 st.write(texto)
     except Exception as e:
         return f"ERRO DA IA: {str(e)}"
