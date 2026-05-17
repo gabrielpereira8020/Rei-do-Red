@@ -1,105 +1,233 @@
 import streamlit as st
-from pre_jogo import tela_pre_jogo
-from ao_vivo import tela_ao_vivo
+import requests
+import pandas as pd
+from datetime import datetime
 
+try:
+    from supabase import create_client
+except ImportError:
+    st.error("Instale supabase no requirements.txt")
+    st.stop()
+
+from ao_vivo import tela_ao_vivo
+from pre_jogo import tela_pre_jogo
+
+# =====================================================
+# CONFIG
+# =====================================================
 st.set_page_config(
-    page_title="Rei do Red",
-    page_icon="🔥",
+    page_title="IA REI DA BOLA PRO",
+    page_icon="🏆",
     layout="wide"
 )
 
-st.title("🔥 REI DO RED")
+# =====================================================
+# CSS PREMIUM
+# =====================================================
+st.markdown("""
+<style>
+.main { background-color: #0b1020; }
+.block-container { padding-top: 1rem; }
+h1, h2, h3 { color: white; }
+.stMetric {
+    background: linear-gradient(145deg,#141b2d,#1d2840);
+    border-radius: 15px;
+    padding: 15px;
+    border: 1px solid #7a3cff;
+}
+.stButton>button {
+    width: 100%;
+    border-radius: 10px;
+    background: linear-gradient(90deg,#7a3cff,#4f46e5);
+    color: white;
+    font-weight: bold;
+    border: none;
+    padding: 12px;
+}
+.stButton>button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(122,60,255,0.4);
+}
+.stExpander {
+    border: 1px solid #252f48;
+    border-radius: 15px;
+    background: #121a2b;
+}
+div[data-testid="stSidebar"] { background-color: #0d1117; }
+.api-counter {
+    background: linear-gradient(135deg,#1a1a0a,#2a2a1a);
+    border: 1px solid #eab308;
+    border-radius: 12px;
+    padding: 10px 16px;
+    text-align: center;
+    margin: 6px 0;
+}
+.api-counter span { color: #eab308; font-weight: bold; font-size: 1.1rem; }
+</style>
+""", unsafe_allow_html=True)
 
-modo = st.sidebar.selectbox(
-    "Escolha o modo",
-    ["Pré Jogo", "Ao Vivo"]
+# =====================================================
+# CONTADOR DE API
+# =====================================================
+LIMITE_DIARIO_API = 100
+
+def get_api_usage_key():
+    return "api_calls_" + datetime.now().strftime("%Y-%m-%d")
+
+def registrar_chamada_api():
+    key = get_api_usage_key()
+    if key not in st.session_state:
+        st.session_state[key] = 0
+    st.session_state[key] += 1
+
+def get_chamadas_hoje():
+    return st.session_state.get(get_api_usage_key(), 0)
+
+# =====================================================
+# INICIALIZAR SUPABASE
+# =====================================================
+@st.cache_resource
+def init_supabase():
+    try:
+        return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    except Exception as e:
+        st.error("Erro Supabase: " + str(e))
+        return None
+
+supabase = init_supabase()
+
+# =====================================================
+# API FOOTBALL
+# =====================================================
+API_KEY = st.secrets["API_KEY"]
+HEADERS = {
+    "x-rapidapi-key": API_KEY,
+    "x-rapidapi-host": "v3.football.api-sports.io"
+}
+
+@st.cache_data(ttl=60)
+def fetch_api(endpoint):
+    try:
+        url = "https://v3.football.api-sports.io/" + endpoint
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        registrar_chamada_api()
+        if r.status_code != 200:
+            return []
+        return r.json().get("response", [])
+    except Exception:
+        return []
+
+# =====================================================
+# TELEGRAM
+# =====================================================
+TELEGRAM_TOKEN   = st.secrets["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
+
+def enviar_telegram(msg):
+    try:
+        r = requests.post(
+            "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage",
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"},
+            timeout=10
+        )
+        return r.status_code == 200
+    except Exception:
+        return False
+
+# =====================================================
+# SALVAR RESULTADO
+# =====================================================
+def salvar_resultado(jogo, resultado, confianca):
+    try:
+        supabase.table("historico").insert({
+            "data": datetime.now().isoformat(),
+            "jogo": jogo,
+            "resultado": resultado,
+            "confianca": confianca
+        }).execute()
+        st.success(resultado + " registrado!")
+    except Exception as e:
+        st.error("Erro ao salvar: " + str(e))
+
+# =====================================================
+# SIDEBAR
+# =====================================================
+st.sidebar.title("🏆 REI DA BOLA")
+st.sidebar.markdown("**Painel Premium**")
+st.sidebar.markdown("---")
+
+# Contador API
+chamadas_hoje = get_chamadas_hoje()
+restantes = max(0, LIMITE_DIARIO_API - chamadas_hoje)
+pct_uso = min(100, int((chamadas_hoje / LIMITE_DIARIO_API) * 100))
+
+st.sidebar.markdown("### 📡 Uso da API Hoje")
+st.sidebar.markdown(
+    "<div class='api-counter'>"
+    "<span>" + str(restantes) + " chamadas restantes</span><br>"
+    "<small style='color:#94a3b8'>Usadas: " + str(chamadas_hoje) + " / " + str(LIMITE_DIARIO_API) + "</small>"
+    "<div style='background:#1e293b;border-radius:999px;height:8px;margin-top:6px'>"
+    "<div style='width:" + str(pct_uso) + "%;height:100%;background:linear-gradient(90deg,#22c55e,#ef4444);border-radius:999px'></div>"
+    "</div></div>",
+    unsafe_allow_html=True
 )
+st.sidebar.markdown("---")
 
-if modo == "Pré Jogo":
-    tela_pre_jogo()
+# Histórico sidebar
+greens = reds = winrate = 0
+try:
+    hdata = supabase.table("historico").select("*").execute()
+    if hdata.data:
+        df_h = pd.DataFrame(hdata.data)
+        greens = len(df_h[df_h["resultado"] == "GREEN"])
+        reds   = len(df_h[df_h["resultado"] == "RED"])
+        total  = greens + reds
+        if total > 0:
+            winrate = round((greens / total) * 100, 1)
+except Exception:
+    pass
 
-elif modo == "Ao Vivo":
-    tela_ao_vivo()
+col_g, col_r = st.sidebar.columns(2)
+col_g.metric("✅ Greens", greens)
+col_r.metric("❌ Reds", reds)
+st.sidebar.metric("📈 Winrate", str(winrate) + "%")
+st.sidebar.markdown("---")
 
-import streamlit as st
-import re
-from google import genai
+if st.sidebar.button("📲 Testar Telegram"):
+    ok = enviar_telegram("<b>🏆 REI DA BOLA</b> - Telegram OK!")
+    st.sidebar.success("✅ OK!") if ok else st.sidebar.error("❌ Falha.")
 
-import streamlit as st
-import re
-from google import genai
-from ligas import LIGAS
-from api_football import buscar_jogos_da_liga
-from ia_engine import gerar_analise_ia
+# =====================================================
+# HEADER
+# =====================================================
+st.title("🏆 IA REI DA BOLA PRO")
+st.caption("Radar inteligente para traders esportivos")
+st.markdown("---")
 
-# =============================================
-# ARQUIVO DE DEBUG v2 - testa com jogo real
-# rode com: streamlit run debug_ia.py
-# =============================================
+# =====================================================
+# TABS
+# =====================================================
+aba1, aba2, aba3 = st.tabs(["🔴 AO VIVO", "⚽ PRÉ-JOGO", "📊 HISTÓRICO"])
 
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+with aba1:
+    tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado)
 
-st.title("🔍 DEBUG v2 - Jogo Real")
+with aba2:
+    tela_pre_jogo(enviar_telegram, salvar_resultado)
 
-pais = st.selectbox("🌍 País", list(LIGAS.keys()))
-competicoes = LIGAS[pais]
-campeonato = st.selectbox("🏆 Competição", list(competicoes.keys()))
-league_id = competicoes[campeonato]
-jogos = buscar_jogos_da_liga(league_id)
-
-if not jogos:
-    st.error("Nenhum jogo encontrado.")
-    st.stop()
-
-jogo_escolhido = st.selectbox("⚽ Jogo", [j["nome"] for j in jogos])
-jogo_info = next(j for j in jogos if j["nome"] == jogo_escolhido)
-
-st.markdown("### 📦 Dados do jogo que vão para a IA:")
-st.json(jogo_info)
-
-if st.button("🚀 Gerar e Debugar"):
-    with st.spinner("Chamando Gemini..."):
-        texto = gerar_analise_ia(jogo_info)
-
+with aba3:
+    st.subheader("📊 Histórico de Apostas")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("✅ Greens", greens)
+    col2.metric("❌ Reds", reds)
+    col3.metric("📈 Winrate", str(winrate) + "%")
     st.markdown("---")
-    st.subheader("📄 TEXTO BRUTO (exatamente o que o Gemini retornou)")
-    st.code(texto, language=None)
-
-    st.subheader("🔬 REPR dos primeiros 800 caracteres")
-    st.code(repr(texto[:800]))
-
-    st.subheader("🧪 Teste de cada marcador")
-
-    marcadores = [
-        ("🔥 APOSTA CRAVADA:", "📊 CONFIANÇA:"),
-        ("📊 CONFIANÇA:", "💎 OPORTUNIDADE DE OURO:"),
-        ("💎 OPORTUNIDADE DE OURO:", "⚽ GOLS:"),
-        ("⚽ GOLS:", "🚩 ESCANTEIOS:"),
-        ("🚩 ESCANTEIOS:", "🟨 CARTÕES:"),
-        ("🟨 CARTÕES:", "🎯 JOGADORES:"),
-        ("🎯 JOGADORES:", "📈 SCORE GOLS:"),
-        ("📈 SCORE GOLS:", "📈 SCORE ESCANTEIOS:"),
-        ("📈 SCORE ESCANTEIOS:", "📈 SCORE CARTÕES:"),
-        ("📈 SCORE CARTÕES:", "⚠️ RISCO:"),
-        ("⚠️ RISCO:", "FIM"),
-    ]
-
-    for inicio, fim in marcadores:
-        padrao = f"{re.escape(inicio)}(.*?){re.escape(fim)}"
-        resultado = re.search(padrao, texto, re.DOTALL)
-
-        if resultado:
-            st.success(f"✅ `{inicio}` → `{resultado.group(1).strip()[:80]}`")
+    try:
+        hdata = supabase.table("historico").select("*").execute()
+        if hdata.data:
+            df = pd.DataFrame(hdata.data).sort_values("data", ascending=False)
+            st.dataframe(df, use_container_width=True)
         else:
-            st.error(f"❌ `{inicio}` → NÃO ENCONTRADO")
-            if inicio in texto:
-                st.warning(f"   ⚠️ Marcador início existe, mas FIM `{fim}` não foi achado.")
-            else:
-                st.error(f"   💀 O marcador `{inicio}` não existe no texto!")
-
-            # Mostra linhas próximas com emojis parecidos
-            st.info("Linhas do texto que podem ser o marcador:")
-            for linha in texto.split('\n'):
-                linha = linha.strip()
-                if linha and any(c in linha for c in ['🔥','📊','💎','⚽','🚩','🟨','🎯','📈','⚠️','FIM']):
-                    st.code(repr(linha))
+            st.info("📭 Nenhum resultado registrado ainda.")
+    except Exception as e:
+        st.error("Erro: " + str(e))
