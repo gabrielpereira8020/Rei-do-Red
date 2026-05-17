@@ -1,37 +1,26 @@
-import streamlit as st
 from google import genai
+import streamlit as st
 
-client = genai.Client(
-    api_key=st.secrets["GEMINI_API_KEY"]
-)
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-def gerar_analise_ia(jogo):
-
+def gerar_analise_pre_jogo(jogo):
     prompt = f"""
 Você é uma IA especialista em apostas esportivas profissionais.
+Responda SOMENTE em texto puro, SEM asteriscos, SEM markdown, SEM negrito.
 
-Analise a partida:
-
+Analise a partida PRÉ-JOGO:
 {jogo["casa"]} x {jogo["fora"]}
 
-Faça análise COMPLETA considerando:
+Considere: tendência de gols, escanteios, cartões, intensidade,
+faltas, finalizações, jogadores perigosos e chances da partida.
 
-- tendência de gols
-- escanteios
-- cartões
-- intensidade
-- faltas
-- finalizações
-- jogadores perigosos
-- chances da partida
-
-Depois gere:
+Responda EXATAMENTE neste formato:
 
 🔥 APOSTA CRAVADA:
 (aposta mais segura)
 
 📊 CONFIANÇA:
-(apenas número)
+(apenas número de 0 a 10)
 
 💎 OPORTUNIDADE DE OURO:
 (aposta de valor)
@@ -46,69 +35,70 @@ Depois gere:
 (análise)
 
 🎯 JOGADORES:
-- provável chute no gol
-- provável sofrer faltas
-- provável cartão
+Nome | Mercado | Chance
+Nome | Mercado | Chance
+Nome | Mercado | Chance
 
 📈 SCORE GOLS:
-(número)
+(número de 0 a 100)
 
 📈 SCORE ESCANTEIOS:
-(número)
+(número de 0 a 100)
 
 📈 SCORE CARTÕES:
-(número)
+(número de 0 a 100)
 
 ⚠️ RISCO:
 (risco da partida)
 
 FIM
 """
-
     try:
-
         response = client.models.generate_content(
             model="models/gemini-2.5-flash-lite",
             contents=prompt
         )
-
         return response.text
-
     except Exception as e:
+        return f"🔥 APOSTA CRAVADA:\nErro\n📊 CONFIANÇA:\n0\n💎 OPORTUNIDADE DE OURO:\nErro\n⚽ GOLS:\nErro\n🚩 ESCANTEIOS:\nErro\n🟨 CARTÕES:\nErro\n🎯 JOGADORES:\nErro\n📈 SCORE GOLS:\n0\n📈 SCORE ESCANTEIOS:\n0\n📈 SCORE CARTÕES:\n0\n⚠️ RISCO:\n{str(e)}\nFIM"
 
-        return f"""
-🔥 APOSTA CRAVADA:
-Erro
+
+def gerar_analise_ao_vivo(jogo):
+    prompt = f"""
+Você é uma IA especialista em trading esportivo AO VIVO.
+Responda SOMENTE em texto puro, SEM asteriscos, SEM markdown, SEM negrito.
+
+Analise o momento ATUAL da partida:
+{jogo["casa"]} x {jogo["fora"]}
+Minuto: {jogo.get("minuto", "?")}
+Placar: {jogo.get("placar", "0 x 0")}
+Estatísticas ao vivo: {jogo.get("stats", "indisponível")}
+Índice de Pressão: {jogo.get("pressao", 0)}
+
+Com base nesses dados ao vivo, responda EXATAMENTE neste formato:
+
+⚡ ENTRADA RECOMENDADA:
+(ENTRA AGORA ou AGUARDA — em qual mercado e por quê)
+
+🎯 CRAVO AO VIVO:
+(melhor aposta para os próximos minutos)
 
 📊 CONFIANÇA:
-0
+(apenas número de 0 a 10)
 
-💎 OPORTUNIDADE DE OURO:
-Erro
+⚠️ RISCOS:
+(1 ou 2 riscos principais)
 
-⚽ GOLS:
-Erro
-
-🚩 ESCANTEIOS:
-Erro
-
-🟨 CARTÕES:
-Erro
-
-🎯 JOGADORES:
-Erro
-
-📈 SCORE GOLS:
-0
-
-📈 SCORE ESCANTEIOS:
-0
-
-📈 SCORE CARTÕES:
-0
-
-⚠️ RISCO:
-{str(e)}
+🔮 FEELING:
+(seu instinto sobre o momento do jogo)
 
 FIM
 """
+    try:
+        response = client.models.generate_content(
+            model="models/gemini-2.5-flash-lite",
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        return f"⚡ ENTRADA RECOMENDADA:\nErro\n🎯 CRAVO AO VIVO:\nErro\n📊 CONFIANÇA:\n0\n⚠️ RISCOS:\nErro\n🔮 FEELING:\n{str(e)}\nFIM"
