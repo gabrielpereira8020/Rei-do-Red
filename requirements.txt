@@ -1,5 +1,5 @@
 streamlit
 requests
 pandas
-google-generativeai
+google-genai==2.3.0
 supabase
