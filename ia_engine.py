@@ -1,60 +1,76 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
-genai.configure(
+client = genai.Client(
     api_key=st.secrets["GEMINI_API_KEY"]
 )
 
-model = genai.GenerativeModel(
-    "gemini-1.5-flash"
-)
-
-def gerar_analise_ia(jogo, dados):
+def gerar_analise_ia(jogo):
 
     prompt = f"""
 Você é uma IA especialista em apostas esportivas profissionais.
 
-Analise PROFISSIONALMENTE:
+Analise a partida:
 
-{jogo}
+{jogo["casa"]} x {jogo["fora"]}
 
-Dados reais:
+Faça análise COMPLETA considerando:
 
-{dados}
-
-Faça análise de:
-- gols
+- tendência de gols
 - escanteios
 - cartões
-- faltas
 - intensidade
-- jogadores com chance de:
-    - chute no gol
-    - sofrer faltas
-    - cometer faltas
-    - tomar cartão
-    - marcar gol
+- faltas
+- finalizações
+- jogadores perigosos
+- chances da partida
 
 Depois gere:
 
-🔥 APOSTA CRAVADA
-📊 CONFIANÇA
-💎 OPORTUNIDADE DE OURO
-⚽ GOLS
-🚩 ESCANTEIOS
-🟨 CARTÕES
-🎯 JOGADORES
-📈 SCORE GOLS
-📈 SCORE ESCANTEIOS
-📈 SCORE CARTÕES
-⚠️ RISCO
+🔥 APOSTA CRAVADA:
+(aposta mais segura)
 
-Responda em formato organizado.
+📊 CONFIANÇA:
+(apenas número)
+
+💎 OPORTUNIDADE DE OURO:
+(aposta de valor)
+
+⚽ GOLS:
+(análise)
+
+🚩 ESCANTEIOS:
+(análise)
+
+🟨 CARTÕES:
+(análise)
+
+🎯 JOGADORES:
+- provável chute no gol
+- provável sofrer faltas
+- provável cartão
+
+📈 SCORE GOLS:
+(número)
+
+📈 SCORE ESCANTEIOS:
+(número)
+
+📈 SCORE CARTÕES:
+(número)
+
+⚠️ RISCO:
+(risco da partida)
+
+FIM
 """
 
     try:
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="models/gemini-2.5-flash-lite",
+            contents=prompt
+        )
 
         return response.text
 
@@ -93,4 +109,6 @@ Erro
 
 ⚠️ RISCO:
 {str(e)}
+
+FIM
 """
