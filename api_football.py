@@ -30,13 +30,24 @@ def buscar_jogos_da_liga(league_id):
     for jogo in data["response"]:
 
         casa = jogo["teams"]["home"]["name"]
+
         fora = jogo["teams"]["away"]["name"]
 
         fixture_id = jogo["fixture"]["id"]
 
+        data_jogo = jogo["fixture"]["date"]
+
         jogos.append({
+
             "nome": f"{casa} x {fora}",
-            "id": fixture_id
+
+            "id": fixture_id,
+
+            "casa": casa,
+
+            "fora": fora,
+
+            "data": data_jogo
         })
 
     return jogos
