@@ -1,31 +1,34 @@
-from google import genai
 import streamlit as st
+import google.generativeai as genai
 
-client = genai.Client(
+genai.configure(
     api_key=st.secrets["GEMINI_API_KEY"]
+)
+
+model = genai.GenerativeModel(
+    "gemini-1.5-flash"
 )
 
 def gerar_analise_ia(jogo, dados):
 
     prompt = f"""
-Você é uma IA especialista em apostas esportivas.
+Você é uma IA especialista em apostas esportivas profissionais.
 
-Analise PROFISSIONALMENTE a partida:
+Analise PROFISSIONALMENTE:
 
 {jogo}
 
-Dados reais da API Football:
+Dados reais:
 
 {dados}
 
-Analise:
+Faça análise de:
 - gols
 - escanteios
 - cartões
-- intensidade
 - faltas
-- finalizações
-- jogadores com maior chance de:
+- intensidade
+- jogadores com chance de:
     - chute no gol
     - sofrer faltas
     - cometer faltas
@@ -34,70 +37,60 @@ Analise:
 
 Depois gere:
 
-1. APOSTA CRAVADA
-2. CONFIANÇA
-3. OPORTUNIDADE DE OURO
-4. ANÁLISE DE GOLS
-5. ESCANTEIOS
-6. CARTÕES
-7. JOGADORES EM DESTAQUE
-8. SCORE DOS MERCADOS
-9. RISCO DA PARTIDA
+🔥 APOSTA CRAVADA
+📊 CONFIANÇA
+💎 OPORTUNIDADE DE OURO
+⚽ GOLS
+🚩 ESCANTEIOS
+🟨 CARTÕES
+🎯 JOGADORES
+📈 SCORE GOLS
+📈 SCORE ESCANTEIOS
+📈 SCORE CARTÕES
+⚠️ RISCO
 
-NÃO invente jogadores inexistentes.
-
-Responda EXATAMENTE nesse formato:
-
-🔥 APOSTA CRAVADA:
-texto
-
-📊 CONFIANÇA:
-numero
-
-💎 OPORTUNIDADE DE OURO:
-texto
-
-⚽ GOLS:
-texto
-
-🚩 ESCANTEIOS:
-texto
-
-🟨 CARTÕES:
-texto
-
-🎯 JOGADORES:
-Nome | Mercado | Chance
-Nome | Mercado | Chance
-Nome | Mercado | Chance
-
-📈 SCORE GOLS:
-numero
-
-📈 SCORE ESCANTEIOS:
-numero
-
-📈 SCORE CARTÕES:
-numero
-
-⚠️ RISCO:
-texto
-
-FIM
+Responda em formato organizado.
 """
 
     try:
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config={
-                "temperature": 0.3
-            }
-        )
+        response = model.generate_content(prompt)
 
         return response.text
 
     except Exception as e:
 
-        return f"Erro IA: {str(e)}"
+        return f"""
+🔥 APOSTA CRAVADA:
+Erro
+
+📊 CONFIANÇA:
+0
+
+💎 OPORTUNIDADE DE OURO:
+Erro
+
+⚽ GOLS:
+Erro
+
+🚩 ESCANTEIOS:
+Erro
+
+🟨 CARTÕES:
+Erro
+
+🎯 JOGADORES:
+Erro
+
+📈 SCORE GOLS:
+0
+
+📈 SCORE ESCANTEIOS:
+0
+
+📈 SCORE CARTÕES:
+0
+
+⚠️ RISCO:
+{str(e)}
+"""
