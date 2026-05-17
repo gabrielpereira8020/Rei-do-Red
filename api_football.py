@@ -20,7 +20,7 @@ def buscar_jogos_da_liga(league_id):
         url = (
             "https://v3.football.api-sports.io/fixtures"
             f"?league={league_id}"
-            f"&season=2025"
+            f"&season={datetime.now().year}"
             f"&date={hoje}"
         )
 
