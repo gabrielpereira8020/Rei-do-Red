@@ -45,9 +45,8 @@ def tela_pre_jogo():
 
         with st.spinner("IA analisando partida..."):
 
-            resposta = gerar_analise_ia(
-                jogo_escolhido,
-                jogos
+        resposta = gerar_analise_ia(
+    jogo_info
             )
 
         exibir_analise(resposta)
