@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 from ia_engine import gerar_analise_ao_vivo
-from formatacao import exibir_analise_ao_vivo
+from formatacao import exibir_analise
 
 LIGAS_ELITE = [71, 72, 73, 39, 40, 140, 141, 78, 79, 135, 136, 61, 62, 94]
 
