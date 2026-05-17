@@ -20,7 +20,7 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado):
     if not jogos:
         st.error("Nenhum jogo encontrado para essa competição.")
 
-    jogo_escolhido = st.selectbox("⚽ Escolha o jogo", [j["nome"] for j in jogos])
+    st.write(jogos)
     jogo_info = next(j for j in jogos if j["nome"] == jogo_escolhido)
 
     if st.button("🔥 GERAR ANÁLISE"):
