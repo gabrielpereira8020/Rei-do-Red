@@ -7,7 +7,7 @@ headers = {
     "x-apisports-key": API_KEY
 }
 
-def buscar_jogos_da_liga(league_id):
+def buscar_jogos_da_liga(...)
 
     url = "https://v3.football.api-sports.io/fixtures"
 
