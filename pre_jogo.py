@@ -43,10 +43,10 @@ def tela_pre_jogo():
 
     if st.button("🔥 GERAR ANÁLISE"):
 
-        with st.spinner("IA analisando partida..."):
+    with st.spinner("IA analisando partida..."):
 
         resposta = gerar_analise_ia(
-    jogo_info
-            )
+            jogo_info
+        )
 
-        exibir_analise(resposta)
+    exibir_analise(resposta)
