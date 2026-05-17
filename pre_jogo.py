@@ -2,15 +2,12 @@ import streamlit as st
 
 from ligas import LIGAS
 
-from api_football import (
-    buscar_jogos_da_liga
-)
+from api_football import buscar_jogos_da_liga
 
 from ia_engine import gerar_analise_ia
 
 from formatacao import exibir_analise
 
-st.set_page_config(layout="wide")
 
 def tela_pre_jogo():
 
@@ -32,21 +29,26 @@ def tela_pre_jogo():
 
     jogos = buscar_jogos_da_liga(league_id)
 
-    lista_jogos = [
-        jogo["nome"] for jogo in jogos
-    ]
+    if not jogos:
+        st.error("Nenhum jogo encontrado.")
+        return
 
     jogo_escolhido = st.selectbox(
         "⚽ Escolha o jogo",
-        lista_jogos
+        [j["nome"] for j in jogos]
+    )
+
+    jogo_info = next(
+        j for j in jogos
+        if j["nome"] == jogo_escolhido
     )
 
     if st.button("🔥 GERAR ANÁLISE"):
 
-    with st.spinner("IA analisando partida..."):
+        with st.spinner("IA analisando partida..."):
 
-        resposta = gerar_analise_ia(
-            jogo_info
-        )
+            resposta = gerar_analise_ia(
+                jogo_info
+            )
 
-    exibir_analise(resposta)
+        exibir_analise(resposta)
