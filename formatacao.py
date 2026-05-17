@@ -3,8 +3,12 @@ import re
 
 
 def pegar(texto, inicio, fim):
+    """Busca conteúdo entre dois marcadores, ignorando ** do markdown do Gemini."""
     try:
-        padrao = f"{re.escape(inicio)}(.*?){re.escape(fim)}"
+        # Monta o padrão aceitando ** opcionais ao redor dos marcadores
+        inicio_escaped = re.escape(inicio)
+        fim_escaped = re.escape(fim)
+        padrao = rf"\*{{0,2}}{inicio_escaped}\*{{0,2}}(.*?)\*{{0,2}}{fim_escaped}"
         resultado = re.search(padrao, texto, re.DOTALL)
         if resultado:
             return resultado.group(1).strip()
@@ -29,25 +33,23 @@ def pegar_numero(texto):
 
 def exibir_analise(texto):
 
-    cravada = limpar(pegar(texto, "🔥 APOSTA CRAVADA:", "📊 CONFIANÇA:"))
-    confianca = limpar(pegar(texto, "📊 CONFIANÇA:", "💎 OPORTUNIDADE DE OURO:"))
-    oportunidade = limpar(pegar(texto, "💎 OPORTUNIDADE DE OURO:", "⚽ GOLS:"))
-    gols = limpar(pegar(texto, "⚽ GOLS:", "🚩 ESCANTEIOS:"))
-    escanteios = limpar(pegar(texto, "🚩 ESCANTEIOS:", "🟨 CARTÕES:"))
-    cartoes = limpar(pegar(texto, "🟨 CARTÕES:", "🎯 JOGADORES:"))
-    jogadores = limpar(pegar(texto, "🎯 JOGADORES:", "📈 SCORE GOLS:"))
-    score_gols = pegar(texto, "📈 SCORE GOLS:", "📈 SCORE ESCANTEIOS:")
+    cravada     = limpar(pegar(texto, "🔥 APOSTA CRAVADA:",     "📊 CONFIANÇA:"))
+    confianca   = limpar(pegar(texto, "📊 CONFIANÇA:",          "💎 OPORTUNIDADE DE OURO:"))
+    oportunidade= limpar(pegar(texto, "💎 OPORTUNIDADE DE OURO:","⚽ GOLS:"))
+    gols        = limpar(pegar(texto, "⚽ GOLS:",               "🚩 ESCANTEIOS:"))
+    escanteios  = limpar(pegar(texto, "🚩 ESCANTEIOS:",         "🟨 CARTÕES:"))
+    cartoes     = limpar(pegar(texto, "🟨 CARTÕES:",            "🎯 JOGADORES:"))
+    jogadores   = limpar(pegar(texto, "🎯 JOGADORES:",          "📈 SCORE GOLS:"))
+    score_gols       = pegar(texto, "📈 SCORE GOLS:",       "📈 SCORE ESCANTEIOS:")
     score_escanteios = pegar(texto, "📈 SCORE ESCANTEIOS:", "📈 SCORE CARTÕES:")
-    score_cartoes = pegar(texto, "📈 SCORE CARTÕES:", "⚠️ RISCO:")
-    risco = limpar(pegar(texto, "⚠️ RISCO:", "FIM"))
+    score_cartoes    = pegar(texto, "📈 SCORE CARTÕES:",    "⚠️ RISCO:")
+    risco       = limpar(pegar(texto, "⚠️ RISCO:",              "FIM"))
 
-    # Extrai só o número dos scores
-    score_gols_num = pegar_numero(score_gols)
+    # Extrai só números
+    confianca_num        = pegar_numero(confianca)
+    score_gols_num       = pegar_numero(score_gols)
     score_escanteios_num = pegar_numero(score_escanteios)
-    score_cartoes_num = pegar_numero(score_cartoes)
-
-    # Extrai só o número da confiança (ex: "8/10" → "8")
-    confianca_num = pegar_numero(confianca)
+    score_cartoes_num    = pegar_numero(score_cartoes)
 
     st.markdown("---")
 
