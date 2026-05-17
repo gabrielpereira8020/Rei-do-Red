@@ -1,42 +1,33 @@
-import requests
-import streamlit as st
+def buscar_jogos_da_liga(league_id):
 
-API_KEY = st.secrets["API_FOOTBALL_KEY"]
+    url = "https://v3.football.api-sports.io/fixtures"
 
-headers = {
-    "x-apisports-key": API_KEY
-}
+    params = {
+        "league": league_id,
+        "season": 2025,
+        "next": 20
+    }
 
-def buscar_estatisticas_jogo(jogo):
+    response = requests.get(
+        url,
+        headers=headers,
+        params=params
+    )
 
-    try:
+    data = response.json()
 
-        url = "https://v3.football.api-sports.io/fixtures"
+    jogos = []
 
-        params = {
-            "search": jogo
-        }
+    for jogo in data["response"]:
 
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params
-        )
+        casa = jogo["teams"]["home"]["name"]
+        fora = jogo["teams"]["away"]["name"]
 
-        data = response.json()
+        fixture_id = jogo["fixture"]["id"]
 
-        # VOCÊ PODE MELHORAR DEPOIS
-        # PEGANDO:
-        # - odds
-        # - jogadores
-        # - cartões
-        # - escanteios
-        # - últimos jogos
+        jogos.append({
+            "nome": f"{casa} x {fora}",
+            "id": fixture_id
+        })
 
-        return data
-
-    except Exception as e:
-
-        return {
-            "erro": str(e)
-        }
+    return jogos
