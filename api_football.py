@@ -1,53 +1,63 @@
 import requests
 import streamlit as st
+from datetime import datetime
 
-API_KEY = st.secrets.get("API_FOOTBALL_KEY")
 
-headers = {
-    "x-apisports-key": API_KEY
+API_KEY = st.secrets["API_KEY"]
+
+HEADERS = {
+    "x-rapidapi-key": API_KEY,
+    "x-rapidapi-host": "v3.football.api-sports.io"
 }
+
 
 def buscar_jogos_da_liga(league_id):
 
-    url = "https://v3.football.api-sports.io/fixtures"
+    try:
 
-    params = {
-        "league": league_id,
-        "season": 2025,
-        "next": 20
-    }
+        hoje = datetime.now().strftime("%Y-%m-%d")
 
-    response = requests.get(
-        url,
-        headers=headers,
-        params=params
-    )
+        url = (
+            "https://v3.football.api-sports.io/fixtures"
+            f"?league={league_id}"
+            f"&season=2025"
+            f"&date={hoje}"
+        )
 
-    data = response.json()
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=15
+        )
 
-    jogos = []
+        if response.status_code != 200:
+            st.error(f"Erro API: {response.status_code}")
+            return []
 
-    for jogo in data["response"]:
+        data = response.json()
 
-        casa = jogo["teams"]["home"]["name"]
+        jogos = data.get("response", [])
 
-        fora = jogo["teams"]["away"]["name"]
+        resultado = []
 
-        fixture_id = jogo["fixture"]["id"]
+        for jogo in jogos:
 
-        data_jogo = jogo["fixture"]["date"]
+            fixture_id = jogo["fixture"]["id"]
 
-        jogos.append({
+            home = jogo["teams"]["home"]["name"]
+            away = jogo["teams"]["away"]["name"]
 
-            "nome": f"{casa} x {fora}",
+            resultado.append({
+                "id": fixture_id,
+                "nome": f"{home} x {away}",
+                "time_casa": home,
+                "time_fora": away,
+                "liga": jogo["league"]["name"],
+                "data": jogo["fixture"]["date"]
+            })
 
-            "id": fixture_id,
+        return resultado
 
-            "casa": casa,
-
-            "fora": fora,
-
-            "data": data_jogo
-        })
-
-    return jogos
+    except Exception as e:
+        st.error(f"Erro buscar_jogos_da_liga: {e}")
+        return []
