@@ -25,92 +25,49 @@ import streamlit as st
 import re
 from google import genai
 
+import streamlit as st
+import re
+from google import genai
+from ligas import LIGAS
+from api_football import buscar_jogos_da_liga
+from ia_engine import gerar_analise_ia
+
 # =============================================
-# ARQUIVO DE DEBUG - cole na raiz do projeto
+# ARQUIVO DE DEBUG v2 - testa com jogo real
 # rode com: streamlit run debug_ia.py
 # =============================================
 
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-st.title("🔍 DEBUG - O que o Gemini retorna?")
+st.title("🔍 DEBUG v2 - Jogo Real")
 
-if st.button("🚀 Gerar resposta de teste"):
-    prompt = """
-Você é uma IA especialista em apostas esportivas profissionais.
+pais = st.selectbox("🌍 País", list(LIGAS.keys()))
+competicoes = LIGAS[pais]
+campeonato = st.selectbox("🏆 Competição", list(competicoes.keys()))
+league_id = competicoes[campeonato]
+jogos = buscar_jogos_da_liga(league_id)
 
-Analise a partida:
-Flamengo x Vasco
+if not jogos:
+    st.error("Nenhum jogo encontrado.")
+    st.stop()
 
-Faça análise COMPLETA considerando:
-- tendência de gols
-- escanteios
-- cartões
-- intensidade
-- faltas
-- finalizações
-- jogadores perigosos
-- chances da partida
+jogo_escolhido = st.selectbox("⚽ Jogo", [j["nome"] for j in jogos])
+jogo_info = next(j for j in jogos if j["nome"] == jogo_escolhido)
 
-Depois gere:
+st.markdown("### 📦 Dados do jogo que vão para a IA:")
+st.json(jogo_info)
 
-🔥 APOSTA CRAVADA:
-(aposta mais segura)
-
-📊 CONFIANÇA:
-(apenas número)
-
-💎 OPORTUNIDADE DE OURO:
-(aposta de valor)
-
-⚽ GOLS:
-(análise)
-
-🚩 ESCANTEIOS:
-(análise)
-
-🟨 CARTÕES:
-(análise)
-
-🎯 JOGADORES:
-- provável chute no gol
-- provável sofrer faltas
-- provável cartão
-
-📈 SCORE GOLS:
-(número)
-
-📈 SCORE ESCANTEIOS:
-(número)
-
-📈 SCORE CARTÕES:
-(número)
-
-⚠️ RISCO:
-(risco da partida)
-
-FIM
-"""
-
+if st.button("🚀 Gerar e Debugar"):
     with st.spinner("Chamando Gemini..."):
-        try:
-            response = client.models.generate_content(
-                model="models/gemini-2.5-flash-lite",
-                contents=prompt
-            )
-            texto = response.text
-        except Exception as e:
-            st.error(f"Erro na API: {e}")
-            st.stop()
+        texto = gerar_analise_ia(jogo_info)
 
-    # ---- MOSTRAR TEXTO BRUTO ----
-    st.subheader("📄 TEXTO BRUTO DO GEMINI (exatamente o que veio)")
+    st.markdown("---")
+    st.subheader("📄 TEXTO BRUTO (exatamente o que o Gemini retornou)")
     st.code(texto, language=None)
 
-    # ---- MOSTRAR REPR (caracteres invisíveis) ----
-    st.subheader("🔬 REPR do texto (mostra caracteres especiais)")
-    st.code(repr(texto[:500]))
+    st.subheader("🔬 REPR dos primeiros 800 caracteres")
+    st.code(repr(texto[:800]))
 
-    # ---- TESTAR CADA MARCADOR ----
     st.subheader("🧪 Teste de cada marcador")
 
     marcadores = [
@@ -132,18 +89,17 @@ FIM
         resultado = re.search(padrao, texto, re.DOTALL)
 
         if resultado:
-            st.success(f"✅ '{inicio}' → ENCONTRADO: `{resultado.group(1).strip()[:80]}`")
+            st.success(f"✅ `{inicio}` → `{resultado.group(1).strip()[:80]}`")
         else:
-            st.error(f"❌ '{inicio}' → NÃO ENCONTRADO")
-
-            # Tenta encontrar o marcador sozinho no texto
+            st.error(f"❌ `{inicio}` → NÃO ENCONTRADO")
             if inicio in texto:
-                st.warning(f"   ⚠️ O marcador '{inicio}' EXISTE no texto, mas o regex falhou.")
-                st.warning(f"   → Provavelmente o FIM '{fim}' não existe ou está diferente no texto.")
+                st.warning(f"   ⚠️ Marcador início existe, mas FIM `{fim}` não foi achado.")
             else:
-                st.error(f"   💀 O marcador '{inicio}' NÃO EXISTE no texto retornado!")
-                # Mostra o que está próximo
-                for linha in texto.split('\n'):
-                    if any(c in linha for c in inicio if c.isalpha()):
-                        st.info(f"   Linha próxima encontrada: `{linha}`")
-                        break
+                st.error(f"   💀 O marcador `{inicio}` não existe no texto!")
+
+            # Mostra linhas próximas com emojis parecidos
+            st.info("Linhas do texto que podem ser o marcador:")
+            for linha in texto.split('\n'):
+                linha = linha.strip()
+                if linha and any(c in linha for c in ['🔥','📊','💎','⚽','🚩','🟨','🎯','📈','⚠️','FIM']):
+                    st.code(repr(linha))
