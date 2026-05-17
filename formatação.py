@@ -1,14 +1,17 @@
-# =========================================
-# ARQUIVO: formatacao.py
-# =========================================
-
+import streamlit as st
 import re
 
 def pegar(texto, inicio, fim):
 
     try:
+
         padrao = f"{inicio}(.*?){fim}"
-        resultado = re.search(padrao, texto, re.DOTALL)
+
+        resultado = re.search(
+            padrao,
+            texto,
+            re.DOTALL
+        )
 
         if resultado:
             return resultado.group(1).strip()
@@ -18,8 +21,7 @@ def pegar(texto, inicio, fim):
     except:
         return "Erro"
 
-
-def extrair_resposta(texto):
+def exibir_analise(texto):
 
     cravada = pegar(
         texto,
@@ -57,7 +59,7 @@ def extrair_resposta(texto):
         "🎯 JOGADORES:"
     )
 
-    jogadores_texto = pegar(
+    jogadores = pegar(
         texto,
         "🎯 JOGADORES:",
         "📈 SCORE GOLS:"
@@ -87,40 +89,51 @@ def extrair_resposta(texto):
         "FIM"
     )
 
-    jogadores = []
+    st.markdown("---")
 
-    linhas = jogadores_texto.split("\n")
+    st.markdown("## 🔥 APOSTA CRAVADA")
+    st.success(cravada)
 
-    for linha in linhas:
+    st.markdown("## 📊 CONFIANÇA")
+    st.metric(
+        "Confiança IA",
+        confianca
+    )
 
-        if "|" in linha:
+    st.markdown("## 💎 OPORTUNIDADE DE OURO")
+    st.warning(oportunidade)
 
-            partes = linha.split("|")
+    st.markdown("## ⚽ GOLS")
+    st.info(gols)
 
-            if len(partes) >= 3:
+    st.markdown("## 🚩 ESCANTEIOS")
+    st.info(escanteios)
 
-                jogadores.append({
-                    "nome": partes[0].strip(),
-                    "mercado": partes[1].strip(),
-                    "chance": partes[2].strip()
-                })
+    st.markdown("## 🟨 CARTÕES")
+    st.info(cartoes)
 
-    return {
-        "cravada": cravada,
-        "confianca": confianca,
-        "oportunidade": oportunidade,
-        "gols": gols,
-        "escanteios": escanteios,
-        "cartoes": cartoes,
-        "jogadores": jogadores,
-        "score_gols": int(
-            ''.join(filter(str.isdigit, score_gols))
-        ) if any(char.isdigit() for char in score_gols) else 0,
-        "score_escanteios": int(
-            ''.join(filter(str.isdigit, score_escanteios))
-        ) if any(char.isdigit() for char in score_escanteios) else 0,
-        "score_cartoes": int(
-            ''.join(filter(str.isdigit, score_cartoes))
-        ) if any(char.isdigit() for char in score_cartoes) else 0,
-        "risco": risco
-    }
+    st.markdown("## 🎯 JOGADORES")
+    st.write(jogadores)
+
+    st.markdown("## 📈 SCORE DOS MERCADOS")
+
+    try:
+        st.progress(int(score_gols)/100)
+        st.write(f"Gols: {score_gols}%")
+    except:
+        pass
+
+    try:
+        st.progress(int(score_escanteios)/100)
+        st.write(f"Escanteios: {score_escanteios}%")
+    except:
+        pass
+
+    try:
+        st.progress(int(score_cartoes)/100)
+        st.write(f"Cartões: {score_cartoes}%")
+    except:
+        pass
+
+    st.markdown("## ⚠️ RISCO")
+    st.error(risco)
