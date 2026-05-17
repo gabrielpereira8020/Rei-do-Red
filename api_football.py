@@ -7,18 +7,36 @@ headers = {
     "x-apisports-key": API_KEY
 }
 
-def buscar_jogo(nome_jogo):
+def buscar_estatisticas_jogo(jogo):
 
-    url = "https://v3.football.api-sports.io/fixtures"
+    try:
 
-    params = {
-        "search": nome_jogo
-    }
+        url = "https://v3.football.api-sports.io/fixtures"
 
-    response = requests.get(
-        url,
-        headers=headers,
-        params=params
-    )
+        params = {
+            "search": jogo
+        }
 
-    return response.json()
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params
+        )
+
+        data = response.json()
+
+        # VOCÊ PODE MELHORAR DEPOIS
+        # PEGANDO:
+        # - odds
+        # - jogadores
+        # - cartões
+        # - escanteios
+        # - últimos jogos
+
+        return data
+
+    except Exception as e:
+
+        return {
+            "erro": str(e)
+        }
