@@ -15,7 +15,7 @@ def buscar_jogos_da_liga(league_id):
 
     try:
 
-        ano_atual = datetime.now().year
+        temporadas = [2025, 2026, 2027]
 
         datas = [
             datetime.now(),
@@ -24,49 +24,51 @@ def buscar_jogos_da_liga(league_id):
 
         jogos_formatados = []
 
-        for data_ref in datas:
+        for season in temporadas:
 
-            data_str = data_ref.strftime("%Y-%m-%d")
+            for data_ref in datas:
 
-            url = (
-                "https://v3.football.api-sports.io/fixtures"
-                f"?league={league_id}"
-                f"&season={ano_atual}"
-                f"&date={data_str}"
-            )
+                data_str = data_ref.strftime("%Y-%m-%d")
 
-            response = requests.get(
-                url,
-                headers=HEADERS,
-                timeout=15
-            )
+                url = (
+                    "https://v3.football.api-sports.io/fixtures"
+                    f"?league={league_id}"
+                    f"&season={season}"
+                    f"&date={data_str}"
+                )
 
-            if response.status_code != 200:
-                continue
+                response = requests.get(
+                    url,
+                    headers=HEADERS,
+                    timeout=15
+                )
 
-            data = response.json()
+                if response.status_code != 200:
+                    continue
 
-            jogos = data.get("response", [])
+                data = response.json()
 
-            for jogo in jogos:
+                jogos = data.get("response", [])
 
-                fixture_id = jogo["fixture"]["id"]
+                for jogo in jogos:
 
-                home = jogo["teams"]["home"]["name"]
-                away = jogo["teams"]["away"]["name"]
+                    fixture_id = jogo["fixture"]["id"]
 
-                jogo_formatado = {
-                    "id": fixture_id,
-                    "nome": f"{home} x {away}",
-                    "time_casa": home,
-                    "time_fora": away,
-                    "liga": jogo["league"]["name"],
-                    "data": jogo["fixture"]["date"]
-                }
+                    # evita duplicados
+                    if any(j["id"] == fixture_id for j in jogos_formatados):
+                        continue
 
-                # evita duplicados
-                if not any(j["id"] == fixture_id for j in jogos_formatados):
-                    jogos_formatados.append(jogo_formatado)
+                    home = jogo["teams"]["home"]["name"]
+                    away = jogo["teams"]["away"]["name"]
+
+                    jogos_formatados.append({
+                        "id": fixture_id,
+                        "nome": f"{home} x {away}",
+                        "time_casa": home,
+                        "time_fora": away,
+                        "liga": jogo["league"]["name"],
+                        "data": jogo["fixture"]["date"]
+                    })
 
         return jogos_formatados
 
