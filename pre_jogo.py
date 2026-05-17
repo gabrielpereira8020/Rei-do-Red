@@ -15,9 +15,11 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado):
 
     jogos = buscar_jogos_da_liga(league_id)
 
+    st.write(jogos)
+
     if not jogos:
         st.error("Nenhum jogo encontrado para essa competição.")
-        return
+    return de
 
     jogo_escolhido = st.selectbox("⚽ Escolha o jogo", [j["nome"] for j in jogos])
     jogo_info = next(j for j in jogos if j["nome"] == jogo_escolhido)
