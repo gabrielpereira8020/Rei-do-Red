@@ -9,7 +9,7 @@ except ImportError:
     st.error("Instale supabase no requirements.txt")
     st.stop()
 
-from ao_vivo import tela_ao_vivo
+from ao_vivo import tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado)
 from pre_jogo import tela_pre_jogo
 
 # =====================================================
