@@ -27,8 +27,6 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado):
     # Buscar jogos
     jogos = buscar_jogos_da_liga(league_id)
 
-    # DEBUG
-    st.write("DEBUG API:", jogos)
 
     # Sem jogos
     if not jogos:
