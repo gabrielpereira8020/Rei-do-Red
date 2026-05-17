@@ -114,7 +114,7 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     }
 
                     resposta = gerar_analise_ao_vivo(jogo_info)
-                    exibir_analise_ao_vivo(resposta)
+                    exibir_analise(resposta)
 
                     # Registrar resultado
                     st.markdown("#### Registrar resultado:")
