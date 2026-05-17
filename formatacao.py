@@ -2,22 +2,15 @@ import streamlit as st
 import re
 
 def pegar(texto, inicio, fim):
-
     try:
-
-        padrao = f"{inicio}(.*?){fim}"
-
-        resultado = re.search(
-            padrao,
-            texto,
-            re.DOTALL
-        )
-
+        inicio_escaped = re.escape(inicio)
+        fim_escaped = re.escape(fim)
+        # Ignora asteriscos e espaços ao redor dos marcadores
+        padrao = rf"\*{{0,2}}{inicio_escaped}\*{{0,2}}\s*(.*?)\s*\*{{0,2}}{fim_escaped}"
+        resultado = re.search(padrao, texto, re.DOTALL)
         if resultado:
             return resultado.group(1).strip()
-
         return "Não encontrado"
-
     except:
         return "Erro"
 
