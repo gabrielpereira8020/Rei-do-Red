@@ -1,8 +1,8 @@
 LIGAS = {
 
     "Brasil": {
-        "Campeonato Brasileiro Série A": 71,
-        "Campeonato Brasileiro Série B": 72
+        "Serie A": 71,
+        "Serie B": 72
     },
 
     "Inglaterra": {
