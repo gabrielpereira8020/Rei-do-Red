@@ -1,43 +1,48 @@
 from google import genai
 import streamlit as st
+from api_football import buscar_contexto_completo, buscar_contexto_ao_vivo
 
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
+# =====================================================
+# PRÉ-JOGO
+# =====================================================
 def gerar_analise_pre_jogo(jogo):
+    contexto = buscar_contexto_completo(jogo)
+
     prompt = f"""
 Você é uma IA especialista em apostas esportivas profissionais.
 Responda SOMENTE em texto puro, SEM asteriscos, SEM markdown, SEM negrito.
 
-Analise a partida PRÉ-JOGO:
-{jogo["casa"]} x {jogo["fora"]}
+Analise a partida PRÉ-JOGO com base nos dados reais abaixo:
 
-Considere: tendência de gols, escanteios, cartões, intensidade,
-faltas, finalizações, jogadores perigosos e chances da partida.
+{contexto}
+
+Use os dados reais acima (classificação, H2H, forma recente e desempenho dos jogadores)
+para embasar cada análise. Não invente informações que não estejam nos dados.
 
 Responda EXATAMENTE neste formato:
 
 🔥 APOSTA CRAVADA:
-(aposta mais segura)
+(aposta mais segura baseada nos dados reais)
 
 📊 CONFIANÇA:
 (apenas número de 0 a 10)
 
 💎 OPORTUNIDADE DE OURO:
-(aposta de valor)
+(aposta de valor com base nos dados)
 
 ⚽ GOLS:
-(análise)
+(análise baseada no H2H, forma recente e atacantes em destaque)
 
 🚩 ESCANTEIOS:
-(análise)
+(análise baseada no estilo de jogo e dados)
 
 🟨 CARTÕES:
-(análise)
+(análise baseada no histórico e jogadores com cartões na temporada)
 
 🎯 JOGADORES:
-Nome | Mercado | Chance
-Nome | Mercado | Chance
-Nome | Mercado | Chance
+(liste 3 jogadores em destaque com mercado recomendado, ex: Nome | Chute no gol | Alta)
 
 📈 SCORE GOLS:
 (número de 0 a 100)
@@ -49,7 +54,7 @@ Nome | Mercado | Chance
 (número de 0 a 100)
 
 ⚠️ RISCO:
-(risco da partida)
+(risco da partida com base nos dados)
 
 FIM
 """
@@ -63,31 +68,37 @@ FIM
         return f"🔥 APOSTA CRAVADA:\nErro\n📊 CONFIANÇA:\n0\n💎 OPORTUNIDADE DE OURO:\nErro\n⚽ GOLS:\nErro\n🚩 ESCANTEIOS:\nErro\n🟨 CARTÕES:\nErro\n🎯 JOGADORES:\nErro\n📈 SCORE GOLS:\n0\n📈 SCORE ESCANTEIOS:\n0\n📈 SCORE CARTÕES:\n0\n⚠️ RISCO:\n{str(e)}\nFIM"
 
 
+# =====================================================
+# AO VIVO
+# =====================================================
 def gerar_analise_ao_vivo(jogo):
+    fixture_id = jogo.get("id")
+    contexto   = buscar_contexto_ao_vivo(jogo, fixture_id)
+
     prompt = f"""
 Você é uma IA especialista em trading esportivo AO VIVO.
 Responda SOMENTE em texto puro, SEM asteriscos, SEM markdown, SEM negrito.
 
-Analise o momento ATUAL da partida:
-{jogo["casa"]} x {jogo["fora"]}
-Minuto: {jogo.get("minuto", "?")}
-Placar: {jogo.get("placar", "0 x 0")}
-Estatísticas ao vivo: {jogo.get("stats", "indisponível")}
-Índice de Pressão: {jogo.get("pressao", 0)}
+Analise o momento ATUAL da partida com os dados ao vivo abaixo:
 
-Com base nesses dados ao vivo, responda EXATAMENTE neste formato:
+{contexto}
+
+Use os dados reais dos jogadores em campo (chutes, gols, cartões, nota)
+para identificar tendências e recomendar entradas precisas.
+
+Responda EXATAMENTE neste formato:
 
 ⚡ ENTRADA RECOMENDADA:
-(ENTRA AGORA ou AGUARDA — em qual mercado e por quê)
+(ENTRA AGORA ou AGUARDA — em qual mercado e por quê, citando os dados)
 
 🎯 CRAVO AO VIVO:
-(melhor aposta para os próximos minutos)
+(melhor aposta para os próximos minutos baseada nos jogadores em destaque)
 
 📊 CONFIANÇA:
 (apenas número de 0 a 10)
 
 ⚠️ RISCOS:
-(1 ou 2 riscos principais)
+(1 ou 2 riscos principais baseados nos dados)
 
 🔮 FEELING:
 (seu instinto sobre o momento do jogo)
