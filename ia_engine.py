@@ -9,7 +9,7 @@ Você é uma IA especialista em apostas esportivas profissionais.
 Responda SOMENTE em texto puro, SEM asteriscos, SEM markdown, SEM negrito.
 
 Analise a partida PRÉ-JOGO:
-{jogo["time_casa"]} x {jogo["time_fora"]}
+{jogo["casa"]} x {jogo["fora"]}
 
 Considere: tendência de gols, escanteios, cartões, intensidade,
 faltas, finalizações, jogadores perigosos e chances da partida.
