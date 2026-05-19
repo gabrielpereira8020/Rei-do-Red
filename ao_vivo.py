@@ -2,7 +2,20 @@ import streamlit as st
 from ia_engine import gerar_analise_ao_vivo
 from formatacao import exibir_analise_ao_vivo
 
-LIGAS_ELITE = [71, 72, 73, 39, 40, 140, 141, 78, 79, 135, 136, 61, 62, 94]
+LIGAS_ELITE = [
+    71, 72, 73,           # Brasil Série A, B, C
+    39, 40,               # Premier League, Championship
+    140, 141,             # LaLiga, LaLiga2
+    78, 79,               # Bundesliga, 2.Bundesliga
+    135, 136,             # Serie A, Serie B
+    61, 62,               # Ligue 1, Ligue 2
+    94,                   # Primeira Liga Portugal
+    13,                   # Copa Libertadores
+    11,                   # Copa Sudamericana
+    2,                    # Champions League
+    3,                    # Europa League
+    848,                  # Conference League
+]
 
 
 def calcular_pressao(stats):
