@@ -1,7 +1,6 @@
 import streamlit as st
-import requests
 from ia_engine import gerar_analise_ao_vivo
-from formatacao import exibir_analise
+from formatacao import exibir_analise_ao_vivo
 
 LIGAS_ELITE = [71, 72, 73, 39, 40, 140, 141, 78, 79, 135, 136, 61, 62, 94]
 
@@ -14,18 +13,15 @@ def calcular_pressao(stats):
         for item in s:
             if item["type"] == nome:
                 v = item["value"]
-                if v is None:
-                    return 0
-                try:
-                    return int(str(v).replace("%", ""))
-                except:
-                    return 0
+                if v is None: return 0
+                try: return int(str(v).replace("%", ""))
+                except: return 0
         return 0
 
     home = stats[0]["statistics"]
     away = stats[1]["statistics"]
-    ph = pegar(home, "Shots on Goal") * 6 + pegar(home, "Corner Kicks") * 3 + pegar(home, "Total Shots") * 2
-    pa = pegar(away, "Shots on Goal") * 6 + pegar(away, "Corner Kicks") * 3 + pegar(away, "Total Shots") * 2
+    ph = pegar(home,"Shots on Goal")*6 + pegar(home,"Corner Kicks")*3 + pegar(home,"Total Shots")*2
+    pa = pegar(away,"Shots on Goal")*6 + pegar(away,"Corner Kicks")*3 + pegar(away,"Total Shots")*2
     return max(ph, pa)
 
 
@@ -46,21 +42,21 @@ def descrever_stats(stats):
     ta = stats[1].get("team", {}).get("name", "Fora")
 
     return (
-        th + ": Chutes " + str(pegar(home, "Total Shots")) +
-        ", No gol " + str(pegar(home, "Shots on Goal")) +
-        ", Escanteios " + str(pegar(home, "Corner Kicks")) +
-        ", Posse " + str(pegar(home, "Ball Possession")) + "%" +
-        ", Faltas " + str(pegar(home, "Fouls")) +
-        ", Cartões A" + str(pegar(home, "Yellow Cards")) +
-        "/V" + str(pegar(home, "Red Cards")) +
+        th + ": Chutes " + str(pegar(home,"Total Shots")) +
+        ", No gol " + str(pegar(home,"Shots on Goal")) +
+        ", Escanteios " + str(pegar(home,"Corner Kicks")) +
+        ", Posse " + str(pegar(home,"Ball Possession")) + "%" +
+        ", Faltas " + str(pegar(home,"Fouls")) +
+        ", Cartões A" + str(pegar(home,"Yellow Cards")) +
+        "/V" + str(pegar(home,"Red Cards")) +
         " | " +
-        ta + ": Chutes " + str(pegar(away, "Total Shots")) +
-        ", No gol " + str(pegar(away, "Shots on Goal")) +
-        ", Escanteios " + str(pegar(away, "Corner Kicks")) +
-        ", Posse " + str(pegar(away, "Ball Possession")) + "%" +
-        ", Faltas " + str(pegar(away, "Fouls")) +
-        ", Cartões A" + str(pegar(away, "Yellow Cards")) +
-        "/V" + str(pegar(away, "Red Cards"))
+        ta + ": Chutes " + str(pegar(away,"Total Shots")) +
+        ", No gol " + str(pegar(away,"Shots on Goal")) +
+        ", Escanteios " + str(pegar(away,"Corner Kicks")) +
+        ", Posse " + str(pegar(away,"Ball Possession")) + "%" +
+        ", Faltas " + str(pegar(away,"Fouls")) +
+        ", Cartões A" + str(pegar(away,"Yellow Cards")) +
+        "/V" + str(pegar(away,"Red Cards"))
     )
 
 
@@ -75,7 +71,7 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
         elite_live = [j for j in jogos_live if j["league"]["id"] in LIGAS_ELITE]
 
     if not elite_live:
-        st.info("⚽ Nenhum jogo ao vivo nas ligas monitoradas no momento.")
+        st.info("⚽ Nenhum jogo ao vivo nas ligas monitoradas.")
         return
 
     st.success("🟢 " + str(len(elite_live)) + " jogo(s) ao vivo")
@@ -84,6 +80,8 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
         fixture_id = jogo["fixture"]["id"]
         home       = jogo["teams"]["home"]["name"]
         away       = jogo["teams"]["away"]["name"]
+        home_id    = jogo["teams"]["home"]["id"]
+        away_id    = jogo["teams"]["away"]["id"]
         gols_home  = jogo["goals"]["home"] or 0
         gols_away  = jogo["goals"]["away"] or 0
         tempo      = jogo["fixture"]["status"]["elapsed"] or "?"
@@ -96,17 +94,20 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
             col3.metric("Visitante", away)
 
             if st.button("⚡ Consultar IA ao Vivo", key="live_" + str(fixture_id)):
-                with st.spinner("Analisando o momento do jogo..."):
-                    stats   = fetch_api("fixtures/statistics?fixture=" + str(fixture_id))
-                    pressao = calcular_pressao(stats)
+                with st.spinner("Analisando jogadores e momento do jogo..."):
+                    stats       = fetch_api("fixtures/statistics?fixture=" + str(fixture_id))
+                    pressao     = calcular_pressao(stats)
                     stats_texto = descrever_stats(stats)
 
                     col_p1, col_p2 = st.columns([1, 3])
                     col_p1.metric("🔥 Pressão", pressao)
 
                     jogo_info = {
+                        "id":      fixture_id,
                         "casa":    home,
                         "fora":    away,
+                        "casa_id": home_id,
+                        "fora_id": away_id,
                         "minuto":  str(tempo),
                         "placar":  home + " " + str(gols_home) + " x " + str(gols_away) + " " + away,
                         "stats":   stats_texto,
@@ -114,9 +115,8 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     }
 
                     resposta = gerar_analise_ao_vivo(jogo_info)
-                    exibir_analise(resposta)
+                    exibir_analise_ao_vivo(resposta)
 
-                    # Registrar resultado
                     st.markdown("#### Registrar resultado:")
                     c1, c2 = st.columns(2)
                     if c1.button("✅ GREEN", key="green_live_" + str(fixture_id)):
@@ -124,11 +124,10 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     if c2.button("❌ RED", key="red_live_" + str(fixture_id)):
                         salvar_resultado(home + " x " + away, "RED", pressao)
 
-                    # Telegram
                     enviar_telegram(
                         "<b>⚡ AO VIVO - REI DA BOLA</b>\n\n" +
                         str(tempo) + "' | " + home + " " + str(gols_home) + "x" + str(gols_away) + " " + away + "\n" +
                         "Liga: " + liga + "\n" +
                         "Pressão: " + str(pressao) + "\n\n" +
-                        resposta[:1000]
+                        resposta[:800]
                     )
