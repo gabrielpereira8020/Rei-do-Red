@@ -42,7 +42,6 @@ Responda EXATAMENTE neste formato:
 (análise baseada no histórico e jogadores com cartões na temporada)
 
 🎯 JOGADORES:
-(liste 3 jogadores em destaque com mercado recomendado)
 Nome | Mercado | Probabilidade
 
 📈 SCORE GOLS:
@@ -64,7 +63,7 @@ FIM
 """
     try:
         response = client.models.generate_content(
-            model="models/gemini-3.1-flash-lite",
+            model="models/gemini-2.0-flash",
             contents=prompt
         )
         return response.text
@@ -101,31 +100,40 @@ Analise o momento ATUAL da partida com os dados ao vivo abaixo:
 
 {contexto}
 
-Use os dados reais dos jogadores em campo para identificar tendências
-e recomendar entradas precisas.
+Analise os 3 mercados principais: GOLS, ESCANTEIOS e CARTÕES.
+Use os dados reais dos jogadores em campo para identificar tendências em cada mercado.
 
 Responda EXATAMENTE neste formato:
 
 ⚡ ENTRADA RECOMENDADA:
-(ENTRA AGORA ou AGUARDA — em qual mercado e por quê, citando os dados)
+(Qual mercado entrar AGORA entre gols, escanteios ou cartões — e por quê, citando os dados)
 
 🎯 CRAVO AO VIVO:
-(melhor aposta para os próximos minutos baseada nos jogadores em destaque)
+(Melhor aposta agora — pode ser gol de jogador específico, próximo escanteio, ou cartão para jogador com faltas)
+
+⚽ GOLS AO VIVO:
+(Tendência de gols nos próximos minutos baseada nos chutes e pressão)
+
+🚩 ESCANTEIOS AO VIVO:
+(Tendência de escanteios baseada no volume de ataque e laterais)
+
+🟨 CARTÕES AO VIVO:
+(Jogador em risco de cartão baseado em faltas cometidas e amarelos)
 
 📊 CONFIANÇA:
 (apenas número de 0 a 10)
 
 ⚠️ RISCOS:
-(1 ou 2 riscos principais baseados nos dados)
+(1 ou 2 riscos principais)
 
 🔮 FEELING:
-(sua opinião pessoal como especialista — o que seus instintos dizem sobre esse momento do jogo?)
+(sua opinião pessoal sobre esse momento do jogo)
 
 FIM
 """
     try:
         response = client.models.generate_content(
-            model="models/gemini-2.5-flash-lite",
+            model="models/gemini-3.1-flash-lite",
             contents=prompt
         )
         return response.text
@@ -133,6 +141,9 @@ FIM
         return (
             "⚡ ENTRADA RECOMENDADA:\nErro\n"
             "🎯 CRAVO AO VIVO:\nErro\n"
+            "⚽ GOLS AO VIVO:\nErro\n"
+            "🚩 ESCANTEIOS AO VIVO:\nErro\n"
+            "🟨 CARTÕES AO VIVO:\nErro\n"
             "📊 CONFIANÇA:\n0\n"
             "⚠️ RISCOS:\nErro\n"
             f"🔮 FEELING:\n{str(e)}\n"
