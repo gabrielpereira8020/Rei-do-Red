@@ -63,7 +63,7 @@ FIM
 """
     try:
         response = client.models.generate_content(
-            model="models/gemini-2.0-flash",
+            model="models/gemini-3.1-flash-lite",
             contents=prompt
         )
         return response.text
