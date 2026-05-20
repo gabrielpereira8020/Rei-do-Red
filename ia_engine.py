@@ -18,8 +18,8 @@ Analise a partida PRÉ-JOGO com base nos dados reais abaixo:
 
 {contexto}
 
-Use os dados reais acima (classificação, H2H, forma recente e desempenho dos jogadores)
-para embasar cada análise. Não invente informações que não estejam nos dados.
+Use os dados reais acima para embasar cada análise.
+Não invente informações que não estejam nos dados.
 
 Responda EXATAMENTE neste formato:
 
@@ -42,7 +42,8 @@ Responda EXATAMENTE neste formato:
 (análise baseada no histórico e jogadores com cartões na temporada)
 
 🎯 JOGADORES:
-(liste 3 jogadores em destaque com mercado recomendado, ex: Nome | Chute no gol | Alta)
+(liste 3 jogadores em destaque com mercado recomendado)
+Nome | Mercado | Probabilidade
 
 📈 SCORE GOLS:
 (número de 0 a 100)
@@ -56,16 +57,33 @@ Responda EXATAMENTE neste formato:
 ⚠️ RISCO:
 (risco da partida com base nos dados)
 
+🔮 FEELING:
+(sua opinião pessoal como especialista — o que seus instintos dizem sobre esse jogo além dos números? Seja direto e confiante)
+
 FIM
 """
     try:
         response = client.models.generate_content(
-            model="models/gemini-3.1-flash-lite",
+            model="models/gemini-2.5-flash-lite",
             contents=prompt
         )
         return response.text
     except Exception as e:
-        return f"🔥 APOSTA CRAVADA:\nErro\n📊 CONFIANÇA:\n0\n💎 OPORTUNIDADE DE OURO:\nErro\n⚽ GOLS:\nErro\n🚩 ESCANTEIOS:\nErro\n🟨 CARTÕES:\nErro\n🎯 JOGADORES:\nErro\n📈 SCORE GOLS:\n0\n📈 SCORE ESCANTEIOS:\n0\n📈 SCORE CARTÕES:\n0\n⚠️ RISCO:\n{str(e)}\nFIM"
+        return (
+            "🔥 APOSTA CRAVADA:\nErro\n"
+            "📊 CONFIANÇA:\n0\n"
+            "💎 OPORTUNIDADE DE OURO:\nErro\n"
+            "⚽ GOLS:\nErro\n"
+            "🚩 ESCANTEIOS:\nErro\n"
+            "🟨 CARTÕES:\nErro\n"
+            "🎯 JOGADORES:\nErro\n"
+            "📈 SCORE GOLS:\n0\n"
+            "📈 SCORE ESCANTEIOS:\n0\n"
+            "📈 SCORE CARTÕES:\n0\n"
+            f"⚠️ RISCO:\n{str(e)}\n"
+            "🔮 FEELING:\nErro\n"
+            "FIM"
+        )
 
 
 # =====================================================
@@ -83,8 +101,8 @@ Analise o momento ATUAL da partida com os dados ao vivo abaixo:
 
 {contexto}
 
-Use os dados reais dos jogadores em campo (chutes, gols, cartões, nota)
-para identificar tendências e recomendar entradas precisas.
+Use os dados reais dos jogadores em campo para identificar tendências
+e recomendar entradas precisas.
 
 Responda EXATAMENTE neste formato:
 
@@ -101,7 +119,7 @@ Responda EXATAMENTE neste formato:
 (1 ou 2 riscos principais baseados nos dados)
 
 🔮 FEELING:
-(seu instinto sobre o momento do jogo)
+(sua opinião pessoal como especialista — o que seus instintos dizem sobre esse momento do jogo?)
 
 FIM
 """
@@ -112,4 +130,11 @@ FIM
         )
         return response.text
     except Exception as e:
-        return f"⚡ ENTRADA RECOMENDADA:\nErro\n🎯 CRAVO AO VIVO:\nErro\n📊 CONFIANÇA:\n0\n⚠️ RISCOS:\nErro\n🔮 FEELING:\n{str(e)}\nFIM"
+        return (
+            "⚡ ENTRADA RECOMENDADA:\nErro\n"
+            "🎯 CRAVO AO VIVO:\nErro\n"
+            "📊 CONFIANÇA:\n0\n"
+            "⚠️ RISCOS:\nErro\n"
+            f"🔮 FEELING:\n{str(e)}\n"
+            "FIM"
+        )
