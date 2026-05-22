@@ -3,18 +3,15 @@ from ia_engine import gerar_analise_ao_vivo
 from formatacao import exibir_analise_ao_vivo
 
 LIGAS_ELITE = [
-    71, 72, 73,           # Brasil Série A, B, C
-    39, 40,               # Premier League, Championship
-    140, 141,             # LaLiga, LaLiga2
-    78, 79,               # Bundesliga, 2.Bundesliga
-    135, 136,             # Serie A, Serie B
-    61, 62,               # Ligue 1, Ligue 2
-    94,                   # Primeira Liga Portugal
-    13,                   # Copa Libertadores
-    11,                   # Copa Sudamericana
-    2,                    # Champions League
-    3,                    # Europa League
-    848,                  # Conference League
+    71, 72, 73,
+    39, 40,
+    140, 141,
+    78, 79,
+    135, 136,
+    61, 62,
+    94,
+    13, 11,
+    2, 3, 848,
 ]
 
 
@@ -76,20 +73,37 @@ def descrever_stats(stats):
 def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
     st.subheader("🔴 Radar ao Vivo")
 
-    if st.button("🔄 Atualizar jogos"):
-        st.cache_data.clear()
+    col_btn, col_toggle = st.columns([1, 2])
+    with col_btn:
+        if st.button("🔄 Atualizar jogos"):
+            st.cache_data.clear()
+            st.rerun()
 
     with st.spinner("Buscando jogos ao vivo..."):
-        jogos_live = fetch_api("fixtures?live=all")
-        elite_live = [j for j in jogos_live if j["league"]["id"] in LIGAS_ELITE]
+        todos_live = fetch_api("fixtures?live=all")
 
-    if not elite_live:
-        st.info("⚽ Nenhum jogo ao vivo nas ligas monitoradas.")
+    if not todos_live:
+        st.warning("⚠️ Nenhum jogo ao vivo no momento.")
         return
 
-    st.success("🟢 " + str(len(elite_live)) + " jogo(s) ao vivo")
+    elite_live  = [j for j in todos_live if j["league"]["id"] in LIGAS_ELITE]
+    outros_live = [j for j in todos_live if j["league"]["id"] not in LIGAS_ELITE]
 
-    for jogo in elite_live:
+    with col_toggle:
+        mostrar_todos = st.toggle("Mostrar todas as ligas", value=False)
+
+    jogos_exibir = todos_live if mostrar_todos else (elite_live if elite_live else todos_live)
+
+    if not jogos_exibir:
+        st.info("⚽ Nenhum jogo ao vivo nas ligas monitoradas. Ative 'Mostrar todas as ligas'.")
+        return
+
+    st.success(
+        "🟢 " + str(len(elite_live)) + " jogo(s) nas ligas principais | " +
+        str(len(outros_live)) + " em outras ligas"
+    )
+
+    for jogo in jogos_exibir:
         fixture_id = jogo["fixture"]["id"]
         home       = jogo["teams"]["home"]["name"]
         away       = jogo["teams"]["away"]["name"]
@@ -99,8 +113,11 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
         gols_away  = jogo["goals"]["away"] or 0
         tempo      = jogo["fixture"]["status"]["elapsed"] or "?"
         liga       = jogo["league"]["name"]
+        pais       = jogo["league"]["country"]
 
-        with st.expander("⏱️ " + str(tempo) + "' | " + liga + " | " + home + " " + str(gols_home) + "x" + str(gols_away) + " " + away):
+        label = "⏱️ " + str(tempo) + "' | " + pais + " - " + liga + " | " + home + " " + str(gols_home) + "x" + str(gols_away) + " " + away
+
+        with st.expander(label):
             col1, col2, col3 = st.columns(3)
             col1.metric("Mandante", home)
             col2.metric("Placar", str(gols_home) + " - " + str(gols_away))
@@ -112,8 +129,7 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     pressao     = calcular_pressao(stats)
                     stats_texto = descrever_stats(stats)
 
-                    col_p1, col_p2 = st.columns([1, 3])
-                    col_p1.metric("🔥 Pressão", pressao)
+                    st.metric("🔥 Índice de Pressão", pressao)
 
                     jogo_info = {
                         "id":      fixture_id,
@@ -128,7 +144,11 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     }
 
                     resposta = gerar_analise_ao_vivo(jogo_info)
-                    exibir_analise_ao_vivo(resposta)
+                    exibir_analise_ao_vivo(
+                        resposta,
+                        nome_casa=home,
+                        nome_fora=away
+                    )
 
                     st.markdown("#### Registrar resultado:")
                     c1, c2 = st.columns(2)
