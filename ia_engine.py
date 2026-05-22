@@ -9,6 +9,8 @@ client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 # =====================================================
 def gerar_analise_pre_jogo(jogo):
     contexto = buscar_contexto_completo(jogo)
+    casa = jogo["casa"]
+    fora = jogo["fora"]
 
     prompt = f"""
 Você é uma IA especialista em apostas esportivas profissionais.
@@ -57,7 +59,21 @@ Nome | Mercado | Probabilidade
 (risco da partida com base nos dados)
 
 🔮 FEELING:
-(sua opinião pessoal como especialista — o que seus instintos dizem sobre esse jogo além dos números? Seja direto e confiante)
+(sua opinião pessoal como especialista sobre esse jogo)
+
+📊 PROJEÇÃO {casa}:
+GOLS: (número inteiro)
+ESCANTEIOS: (número inteiro)
+CARTÕES: (número inteiro)
+FALTAS: (número inteiro)
+FINALIZAÇÕES: (número inteiro)
+
+📊 PROJEÇÃO {fora}:
+GOLS: (número inteiro)
+ESCANTEIOS: (número inteiro)
+CARTÕES: (número inteiro)
+FALTAS: (número inteiro)
+FINALIZAÇÕES: (número inteiro)
 
 FIM
 """
@@ -81,6 +97,8 @@ FIM
             "📈 SCORE CARTÕES:\n0\n"
             f"⚠️ RISCO:\n{str(e)}\n"
             "🔮 FEELING:\nErro\n"
+            f"📊 PROJEÇÃO {jogo['casa']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\nFALTAS: 0\nFINALIZAÇÕES: 0\n"
+            f"📊 PROJEÇÃO {jogo['fora']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\nFALTAS: 0\nFINALIZAÇÕES: 0\n"
             "FIM"
         )
 
@@ -91,6 +109,8 @@ FIM
 def gerar_analise_ao_vivo(jogo):
     fixture_id = jogo.get("id")
     contexto   = buscar_contexto_ao_vivo(jogo, fixture_id)
+    casa = jogo["casa"]
+    fora = jogo["fora"]
 
     prompt = f"""
 Você é uma IA especialista em trading esportivo AO VIVO.
@@ -100,25 +120,25 @@ Analise o momento ATUAL da partida com os dados ao vivo abaixo:
 
 {contexto}
 
-Analise os 3 mercados principais: GOLS, ESCANTEIOS e CARTÕES.
-Use os dados reais dos jogadores em campo para identificar tendências em cada mercado.
+Analise os 3 mercados: GOLS, ESCANTEIOS e CARTÕES.
+Use os dados reais dos jogadores em campo.
 
 Responda EXATAMENTE neste formato:
 
 ⚡ ENTRADA RECOMENDADA:
-(Qual mercado entrar AGORA entre gols, escanteios ou cartões — e por quê, citando os dados)
+(Qual mercado entrar AGORA entre gols, escanteios ou cartões e por quê)
 
 🎯 CRAVO AO VIVO:
-(Melhor aposta agora — pode ser gol de jogador específico, próximo escanteio, ou cartão para jogador com faltas)
+(Melhor aposta agora — pode ser gol de jogador, escanteio ou cartão)
 
 ⚽ GOLS AO VIVO:
-(Tendência de gols nos próximos minutos baseada nos chutes e pressão)
+(Tendência de gols nos próximos minutos)
 
 🚩 ESCANTEIOS AO VIVO:
-(Tendência de escanteios baseada no volume de ataque e laterais)
+(Tendência de escanteios baseada no volume de ataque)
 
 🟨 CARTÕES AO VIVO:
-(Jogador em risco de cartão baseado em faltas cometidas e amarelos)
+(Jogador em risco de cartão baseado em faltas)
 
 📊 CONFIANÇA:
 (apenas número de 0 a 10)
@@ -128,6 +148,16 @@ Responda EXATAMENTE neste formato:
 
 🔮 FEELING:
 (sua opinião pessoal sobre esse momento do jogo)
+
+📊 PROJEÇÃO RESTANTE {casa}:
+GOLS: (quantos gols ainda espera desse time até o fim)
+ESCANTEIOS: (quantos escanteios restantes espera)
+CARTÕES: (quantos cartões restantes espera)
+
+📊 PROJEÇÃO RESTANTE {fora}:
+GOLS: (quantos gols ainda espera desse time até o fim)
+ESCANTEIOS: (quantos escanteios restantes espera)
+CARTÕES: (quantos cartões restantes espera)
 
 FIM
 """
@@ -147,5 +177,7 @@ FIM
             "📊 CONFIANÇA:\n0\n"
             "⚠️ RISCOS:\nErro\n"
             f"🔮 FEELING:\n{str(e)}\n"
+            f"📊 PROJEÇÃO RESTANTE {jogo['casa']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\n"
+            f"📊 PROJEÇÃO RESTANTE {jogo['fora']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\n"
             "FIM"
         )
