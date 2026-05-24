@@ -50,61 +50,49 @@ def extrair_projecao(texto, marcador):
 
 
 def exibir_projecao(proj_casa, proj_fora, nome_casa, nome_fora, ao_vivo=False):
-    """Exibe tabela visual de projeção dos dois times."""
+    """Exibe projeção dos dois times usando colunas nativas do Streamlit."""
     titulo = "📊 PROJEÇÃO RESTANTE DA PARTIDA" if ao_vivo else "📊 PROJEÇÃO DA PARTIDA"
 
-    mercados = ["GOLS", "ESCANTEIOS", "CARTÕES"]
+    mercados = [("GOLS","⚽"), ("ESCANTEIOS","🚩"), ("CARTÕES","🟨")]
     if not ao_vivo:
-        mercados += ["FALTAS", "FINALIZAÇÕES"]
-
-    emojis = {
-        "GOLS": "⚽",
-        "ESCANTEIOS": "🚩",
-        "CARTÕES": "🟨",
-        "FALTAS": "🦵",
-        "FINALIZAÇÕES": "🎯"
-    }
+        mercados += [("FALTAS","🦵"), ("FINALIZAÇÕES","🎯")]
 
     st.markdown(f"<h3 style='color:white;margin-top:24px'>{titulo}</h3>", unsafe_allow_html=True)
 
-    linhas_html = ""
-    for m in mercados:
+    # Cabeçalho
+    st.markdown(f"""
+    <div style='background:#1e293b;border-radius:12px 12px 0 0;padding:10px 16px;
+    display:flex;justify-content:space-between;margin-top:8px'>
+        <span style='color:#64748b;font-size:0.8rem;width:30%'>MERCADO</span>
+        <span style='color:#38bdf8;font-size:0.85rem;font-weight:700;width:25%;text-align:center'>{nome_casa}</span>
+        <span style='color:#64748b;font-size:0.8rem;width:10%;text-align:center'>x</span>
+        <span style='color:#a78bfa;font-size:0.85rem;font-weight:700;width:25%;text-align:center'>{nome_fora}</span>
+        <span style='color:#64748b;font-size:0.8rem;width:10%;text-align:right'>TOT</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for m, emoji in mercados:
         v_casa = proj_casa.get(m, "?")
         v_fora = proj_fora.get(m, "?")
         try:
             total = int(v_casa) + int(v_fora)
-            total_str = f"<span style='color:#94a3b8;font-size:0.8rem'>total: {total}</span>"
+            total_str = str(total)
         except:
-            total_str = ""
+            total_str = "?"
 
-        linhas_html += f"""
-        <tr>
-            <td style='padding:10px 8px;color:#94a3b8;font-size:0.85rem'>{emojis.get(m,'')} {m}</td>
-            <td style='padding:10px 8px;text-align:center;color:#38bdf8;font-weight:700;font-size:1.1rem'>{v_casa}</td>
-            <td style='padding:10px 8px;text-align:center;color:#94a3b8;font-size:0.8rem'>x</td>
-            <td style='padding:10px 8px;text-align:center;color:#a78bfa;font-weight:700;font-size:1.1rem'>{v_fora}</td>
-            <td style='padding:10px 8px;text-align:right'>{total_str}</td>
-        </tr>
-        """
+        st.markdown(f"""
+        <div style='background:#0f172a;border-left:1px solid #1e3a5f;border-right:1px solid #1e3a5f;
+        border-bottom:1px solid #1e3a5f;padding:10px 16px;
+        display:flex;justify-content:space-between;align-items:center'>
+            <span style='color:#94a3b8;font-size:0.85rem;width:30%'>{emoji} {m}</span>
+            <span style='color:#38bdf8;font-weight:800;font-size:1.2rem;width:25%;text-align:center'>{v_casa}</span>
+            <span style='color:#475569;font-size:0.8rem;width:10%;text-align:center'>x</span>
+            <span style='color:#a78bfa;font-weight:800;font-size:1.2rem;width:25%;text-align:center'>{v_fora}</span>
+            <span style='color:#64748b;font-size:0.85rem;width:10%;text-align:right'>{total_str}</span>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div style='background:#0f172a;border:1px solid #1e3a5f;border-radius:16px;padding:4px;margin:10px 0;overflow:hidden'>
-        <table style='width:100%;border-collapse:collapse'>
-            <thead>
-                <tr style='background:#1e293b'>
-                    <th style='padding:10px 8px;text-align:left;color:#64748b;font-size:0.8rem'>MERCADO</th>
-                    <th style='padding:10px 8px;text-align:center;color:#38bdf8;font-size:0.85rem'>{nome_casa}</th>
-                    <th style='padding:4px'></th>
-                    <th style='padding:10px 8px;text-align:center;color:#a78bfa;font-size:0.85rem'>{nome_fora}</th>
-                    <th style='padding:10px 8px;text-align:right;color:#64748b;font-size:0.8rem'>TOTAL</th>
-                </tr>
-            </thead>
-            <tbody>
-                {linhas_html}
-            </tbody>
-        </table>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom:16px'></div>", unsafe_allow_html=True)
 
 
 # =====================================================
