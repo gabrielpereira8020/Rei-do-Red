@@ -27,8 +27,8 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado):
             resposta = gerar_analise_pre_jogo(jogo_info)
             exibir_analise(
                 resposta,
-                nome_casa=jogo_info["time_casa"],
-                nome_fora=jogo_info["time_fora"]
+                nome_casa=jogo_info["nome"],
+                nome_fora=jogo_info["nome"]
             )
 
             st.markdown("#### Registrar resultado:")
