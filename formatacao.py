@@ -110,8 +110,7 @@ def exibir_analise(texto, nome_casa="Casa", nome_fora="Fora"):
     score_escanteios = pegar(texto, "📈 SCORE ESCANTEIOS:", "📈 SCORE CARTÕES:")
     score_cartoes    = pegar(texto, "📈 SCORE CARTÕES:",    "⚠️ RISCO:")
     risco        = limpar(pegar(texto, "⚠️ RISCO:",                "🔮 FEELING:"))
-    feeling      = limpar(pegar(texto, "🔮 FEELING:",              f"📊 PROJEÇÃO {nome_casa}:"))
-
+    feeling = limpar(pegar(texto, "🔮 FEELING:", "FIM"))
     proj_casa = extrair_projecao(texto, f"📊 PROJEÇÃO {nome_casa}:")
     proj_fora = extrair_projecao(texto, f"📊 PROJEÇÃO {nome_fora}:")
 
