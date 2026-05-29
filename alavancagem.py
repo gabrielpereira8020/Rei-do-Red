@@ -468,5 +468,4 @@ def tela_alavancagem():
                 </div>
                 """, unsafe_allow_html=True)
 
-        if st.button("Entrar"):
-    st.write("clicou")
+        if st.button("Entrar"): 
