@@ -467,5 +467,3 @@ def tela_alavancagem():
                 <p style='color:#e2e8f0'>Uma entrada foi perdida. Recomece com a banca inicial.</p>
                 </div>
                 """, unsafe_allow_html=True)
-
-        if st.button(...): 
