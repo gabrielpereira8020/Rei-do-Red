@@ -11,6 +11,7 @@ except ImportError:
 
 from ao_vivo import tela_ao_vivo
 from pre_jogo import tela_pre_jogo
+from alavancagem import tela_alavancagem
 
 # =====================================================
 # CONFIG
@@ -69,7 +70,7 @@ div[data-testid="stSidebar"] { background-color: #0d1117; }
 # =====================================================
 # CONTADOR DE API
 # =====================================================
-LIMITE_DIARIO_API = 100
+LIMITE_DIARIO_API = 7500
 
 def get_api_usage_key():
     return "api_calls_" + datetime.now().strftime("%Y-%m-%d")
@@ -156,7 +157,6 @@ st.sidebar.title("🏆 REI DA BOLA")
 st.sidebar.markdown("**Painel Premium**")
 st.sidebar.markdown("---")
 
-# Contador API
 chamadas_hoje = get_chamadas_hoje()
 restantes = max(0, LIMITE_DIARIO_API - chamadas_hoje)
 pct_uso = min(100, int((chamadas_hoje / LIMITE_DIARIO_API) * 100))
@@ -173,7 +173,6 @@ st.sidebar.markdown(
 )
 st.sidebar.markdown("---")
 
-# Histórico sidebar
 greens = reds = winrate = 0
 try:
     hdata = supabase.table("historico").select("*").execute()
@@ -207,7 +206,7 @@ st.markdown("---")
 # =====================================================
 # TABS
 # =====================================================
-aba1, aba2, aba3 = st.tabs(["🔴 AO VIVO", "⚽ PRÉ-JOGO", "📊 HISTÓRICO"])
+aba1, aba2, aba3 = st.tabs(["🔴 AO VIVO", "⚽ PRÉ-JOGO", "🚀 ALAVANCAGEM"])
 
 with aba1:
     tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado)
@@ -216,18 +215,4 @@ with aba2:
     tela_pre_jogo(enviar_telegram, salvar_resultado)
 
 with aba3:
-    st.subheader("📊 Histórico de Apostas")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("✅ Greens", greens)
-    col2.metric("❌ Reds", reds)
-    col3.metric("📈 Winrate", str(winrate) + "%")
-    st.markdown("---")
-    try:
-        hdata = supabase.table("historico").select("*").execute()
-        if hdata.data:
-            df = pd.DataFrame(hdata.data).sort_values("data", ascending=False)
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("📭 Nenhum resultado registrado ainda.")
-    except Exception as e:
-        st.error("Erro: " + str(e))
+    tela_alavancagem()
