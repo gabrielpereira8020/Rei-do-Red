@@ -8,16 +8,32 @@ from ligas import LIGAS
 # LIGAS PARA VARREDURA
 # =====================================================
 LIGAS_VARREDURA = {
+    # Brasil
     "Brasileirão Série A": 71,
+    "Brasileirão Série B": 72,
+
+    # Europa
     "Premier League": 39,
     "LaLiga": 140,
     "Bundesliga": 78,
     "Serie A": 135,
     "Ligue 1": 61,
-    "Libertadores": 13,
-    "Sudamericana": 11,
+
+    # Competições continentais
     "Champions League": 2,
     "Europa League": 3,
+    "Libertadores": 13,
+    "Sudamericana": 11,
+
+    # Seleções
+    "Copa do Mundo": 1,
+    "Eliminatórias Copa do Mundo": 32,
+    "UEFA Nations League": 5,
+    "Eurocopa": 4,
+    "Copa América": 9,
+
+    # Amistosos seleções
+    "Amistosos Internacionais": 10,
 }
 
 # Bookmaker padrão: bet365 = 6
