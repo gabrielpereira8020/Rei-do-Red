@@ -141,7 +141,7 @@ Responda EXATAMENTE neste formato JSON, sem markdown, sem explicações:
 
     try:
         response = client.models.generate_content(
-            model="models/gemini-2.0-flash",
+            model="gemini-3.1-flash-lite",
             contents=prompt
         )
         texto = response.text.strip()
