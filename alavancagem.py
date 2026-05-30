@@ -1,94 +1,26 @@
 import streamlit as st
 import json
+import requests
 from datetime import datetime
 from api_football import buscar_jogos_da_liga
-from ligas import LIGAS
 
-# =====================================================
-# LIGAS PARA VARREDURA
-# =====================================================
 LIGAS_VARREDURA = {
-    # Brasil
-    "Brasileirão Série A": 71,
-    "Brasileirão Série B": 72,
-
-    # Europa
+    "Brasileirao Serie A": 71,
+    "Brasileirao Serie B": 72,
     "Premier League": 39,
     "LaLiga": 140,
     "Bundesliga": 78,
-    "Serie A": 135,
+    "Serie A Italia": 135,
     "Ligue 1": 61,
-
-    # Competições continentais
-    "Champions League": 2,
-    "Europa League": 3,
     "Libertadores": 13,
     "Sudamericana": 11,
-
-    # Seleções
+    "Champions League": 2,
+    "Europa League": 3,
+    "Amistosos Selecoes": 9,
     "Copa do Mundo": 1,
-    "Eliminatórias Copa do Mundo": 32,
-    "UEFA Nations League": 5,
-    "Eurocopa": 4,
-    "Copa América": 9,
-
-    # Amistosos seleções
-    "Amistosos Internacionais": 10,
 }
 
-# Bookmaker padrão: bet365 = 6
-BOOKMAKER_ID = 6
 
-# =====================================================
-# BUSCAR ODDS REAIS DA API FOOTBALL
-# =====================================================
-def buscar_odds_jogo(fixture_id, headers):
-    try:
-        import requests
-        url = f"https://v3.football.api-sports.io/odds?fixture={fixture_id}&bookmaker={BOOKMAKER_ID}"
-        r = requests.get(url, headers=headers, timeout=15)
-        if r.status_code != 200:
-            return {}
-        data = r.json().get("response", [])
-        if not data:
-            return {}
-
-        odds_formatadas = {}
-        for item in data:
-            for bookmaker in item.get("bookmakers", []):
-                for bet in bookmaker.get("bets", []):
-                    nome_mercado = bet.get("name", "")
-                    valores = bet.get("values", [])
-                    odds_formatadas[nome_mercado] = {
-                        v.get("value", ""): float(v.get("odd", 0))
-                        for v in valores
-                    }
-        return odds_formatadas
-    except Exception:
-        return {}
-
-
-def formatar_odds_para_ia(odds_dict):
-    """Formata as odds em texto legível para o prompt da IA."""
-    if not odds_dict:
-        return "Odds indisponíveis"
-    linhas = []
-    mercados_interesse = [
-        "Match Winner", "Goals Over/Under", "Both Teams Score",
-        "Double Chance", "Asian Handicap", "First Half Goals",
-        "Corners Over Under", "Cards Over Under"
-    ]
-    for mercado in mercados_interesse:
-        if mercado in odds_dict:
-            vals = odds_dict[mercado]
-            linha = f"  {mercado}: " + " | ".join([f"{k}: {v}" for k, v in vals.items()])
-            linhas.append(linha)
-    return "\n".join(linhas) if linhas else "Odds indisponíveis para mercados principais"
-
-
-# =====================================================
-# ESTADO DA ALAVANCAGEM
-# =====================================================
 def init_estado():
     defaults = {
         "alav_banca_inicial": 10.0,
@@ -99,16 +31,16 @@ def init_estado():
         "alav_entrada_atual": 0,
         "alav_odd_min": 1.3,
         "alav_odd_max": 2.0,
-        "alav_jogos_disponiveis": [],
+        "alav_jogos": [],
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
 
-def calcular_tabela(banca_inicial, odd, total):
+def calcular_tabela(banca, odd, total):
     tabela = []
-    valor = banca_inicial
+    valor = banca
     for i in range(1, total + 1):
         retorno = round(valor * odd, 2)
         tabela.append({
@@ -119,97 +51,147 @@ def calcular_tabela(banca_inicial, odd, total):
             "lucro": round(retorno - valor, 2),
             "status": None,
             "bilhete": [],
+            "tipo": "",
+            "confianca": 0,
             "data": "",
         })
         valor = retorno
     return tabela
 
 
-# =====================================================
-# VARREDURA DE JOGOS COM ODDS REAIS
-# =====================================================
-def varrer_jogos_com_odds(headers):
+def buscar_odds_fixture(fixture_id, api_key):
+    """Busca odds tentando varios bookmakers."""
+    # Tenta vários bookmakers: bet365=6, Unibet=5, William Hill=7, Bwin=4
+    bookmakers = [6, 5, 7, 4, 8, 11]
+    headers = {
+        "x-rapidapi-key": api_key,
+        "x-rapidapi-host": "v3.football.api-sports.io"
+    }
+    mercados_ok = [
+        "Match Winner", "Goals Over/Under", "Both Teams Score",
+        "Double Chance", "First Half Goals", "Asian Handicap",
+        "Goals Over/Under First Half"
+    ]
+
+    for bk_id in bookmakers:
+        try:
+            url = "https://v3.football.api-sports.io/odds?fixture=" + str(fixture_id) + "&bookmaker=" + str(bk_id)
+            r = requests.get(url, headers=headers, timeout=15)
+            if r.status_code != 200:
+                continue
+            data = r.json().get("response", [])
+            if not data:
+                continue
+
+            linhas = []
+            for item in data:
+                for bk in item.get("bookmakers", []):
+                    for bet in bk.get("bets", []):
+                        nome = bet.get("name", "")
+                        if nome in mercados_ok:
+                            vals = bet.get("values", [])
+                            linha = nome + ": " + " | ".join(
+                                str(v.get("value", "")) + " @ " + str(v.get("odd", ""))
+                                for v in vals
+                            )
+                            linhas.append(linha)
+
+            if linhas:
+                return "\n".join(linhas[:10])
+        except Exception:
+            continue
+
+    return ""
+
+
+def varrer_jogos(api_key):
     todos = []
-    progress = st.progress(0)
-    status_txt = st.empty()
     ligas = list(LIGAS_VARREDURA.items())
-
-    for i, (nome_liga, league_id) in enumerate(ligas):
-        status_txt.text(f"🔍 Buscando: {nome_liga}...")
-        progress.progress((i + 1) / len(ligas))
-        jogos = buscar_jogos_da_liga(league_id)
-        for j in jogos:
-            j["liga"] = nome_liga
-            todos.append(j)
-
-    progress.empty()
-    status_txt.empty()
+    prog = st.progress(0)
+    txt = st.empty()
+    for i, (nome, league_id) in enumerate(ligas):
+        txt.text("Buscando " + nome + "...")
+        prog.progress((i + 1) / len(ligas))
+        try:
+            jogos = buscar_jogos_da_liga(league_id)
+            for j in jogos:
+                j["liga_nome"] = nome
+                todos.append(j)
+        except Exception:
+            pass
+    prog.empty()
+    txt.empty()
     return todos
 
 
-# =====================================================
-# IA SELECIONA PRÓXIMA ENTRADA
-# =====================================================
-def ia_selecionar_proxima_entrada(jogos_com_odds, odd_min, odd_max, entrada_num, banca, historico):
+def buscar_odds_todos(jogos, api_key):
+    resultado = []
+    total = min(len(jogos), 50)
+    if total == 0:
+        return resultado
+
+    prog = st.progress(0)
+    txt = st.empty()
+
+    for i, j in enumerate(jogos[:50]):
+        txt.text("Buscando odds: " + j.get("nome", "") + "...")
+        prog.progress((i + 1) / total)
+        odds_txt = buscar_odds_fixture(j["id"], api_key)
+        j["odds_txt"] = odds_txt if odds_txt else "Sem odds - usar conhecimento geral"
+        resultado.append(j)
+
+    prog.empty()
+    txt.empty()
+    return resultado
+
+
+def ia_proxima_entrada(jogos, odd_min, odd_max, num_entrada, banca, historico):
     from google import genai
     client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-    # Monta contexto dos jogos
-    contexto_jogos = ""
-    for j in jogos_com_odds[:30]:  # Limita para não estourar tokens
-        contexto_jogos += f"\n🏟️ {j['nome']} | {j['liga']}\n"
-        contexto_jogos += f"   Odds disponíveis:\n{j.get('odds_texto', 'Sem odds')}\n"
+    # Separa jogos com e sem odds
+    com_odds = [j for j in jogos if "Sem odds" not in j.get("odds_txt", "Sem odds")]
+    sem_odds = [j for j in jogos if "Sem odds" in j.get("odds_txt", "Sem odds")]
 
-    # Histórico de entradas anteriores
-    hist_txt = ""
+    ctx_jogos = ""
+    for j in com_odds[:20]:
+        ctx_jogos += "\nJogo: " + j.get("nome", "") + " | Liga: " + j.get("liga_nome", "") + "\n"
+        ctx_jogos += j.get("odds_txt", "") + "\n"
+
+    if sem_odds and len(com_odds) < 5:
+        ctx_jogos += "\nJogos sem odds na API (use seu conhecimento para estimar):\n"
+        for j in sem_odds[:15]:
+            ctx_jogos += "- " + j.get("nome", "") + " | " + j.get("liga_nome", "") + "\n"
+
+    ctx_hist = ""
     if historico:
-        hist_txt = "\nEntradas já realizadas nessa alavancagem:\n"
+        ctx_hist = "\nHistorico:\n"
         for h in historico:
-            status = "✅ GREEN" if h["status"] is True else "❌ RED" if h["status"] is False else "⏳"
+            s = "GREEN" if h["status"] is True else "RED"
             for b in h.get("bilhete", []):
-                hist_txt += f"  {status} #{h['entrada']}: {b.get('jogo','')} — {b.get('mercado','')} @ {b.get('odd','')}\n"
+                ctx_hist += s + " | " + b.get("jogo", "") + " - " + b.get("mercado", "") + "\n"
 
-    prompt = f"""
-Você é uma IA especialista em apostas esportivas com foco em alavancagem progressiva segura.
-
-SITUAÇÃO ATUAL:
-- Entrada #{entrada_num} da alavancagem
-- Banca disponível: R$ {banca:.2f}
-- Odd alvo do bilhete: entre {odd_min}x e {odd_max}x
-{hist_txt}
-
-JOGOS DISPONÍVEIS HOJE COM ODDS REAIS:
-{contexto_jogos}
-
-SUA TAREFA:
-Selecione O MELHOR BILHETE para essa entrada. Pode ser:
-- 1 jogo simples com odd entre {odd_min}x e {odd_max}x, OU
-- Combinada de 2 jogos onde a odd COMBINADA (multiplicada) fique entre {odd_min}x e {odd_max}x
-
-CRITÉRIOS OBRIGATÓRIOS:
-- Use APENAS odds reais dos jogos listados acima
-- Priorize mercados seguros: Over 0.5 gols HT, Over 1.5 gols FT, Ambos Marcam Sim, Double Chance
-- Para combinadas: escolha jogos de ligas DIFERENTES
-- Odd combinada final deve estar entre {odd_min}x e {odd_max}x
-- Se NÃO houver nenhuma entrada segura hoje, responda com {{"sem_entrada": true, "motivo": "explicação"}}
-
-Responda SOMENTE com JSON válido, sem markdown:
-{{
-  "sem_entrada": false,
-  "tipo": "simples" ou "combinada",
-  "odd_total": 1.65,
-  "confianca": 8,
-  "bilhete": [
-    {{
-      "jogo": "Time A x Time B",
-      "liga": "Nome da liga",
-      "mercado": "Over 1.5 gols FT",
-      "odd": 1.65,
-      "motivo": "Motivo em 1 frase"
-    }}
-  ]
-}}
-"""
+    prompt = (
+        "Voce e uma IA especialista em apostas esportivas para alavancagem progressiva segura.\n\n"
+        "SITUACAO:\n"
+        "Entrada #" + str(num_entrada) + "\n"
+        "Banca: R$ " + str(round(banca, 2)) + "\n"
+        "Odd alvo: entre " + str(odd_min) + "x e " + str(odd_max) + "x\n"
+        + ctx_hist + "\n"
+        "JOGOS DISPONIVEIS:\n"
+        + ctx_jogos + "\n"
+        "INSTRUCOES:\n"
+        "- Selecione 1 bilhete: simples (1 jogo) ou combinada (2 jogos de ligas diferentes)\n"
+        "- Odd combinada deve ficar entre " + str(odd_min) + "x e " + str(odd_max) + "x\n"
+        "- Para jogos com odds reais: use exatamente os valores listados\n"
+        "- Para jogos sem odds: estime com base no seu conhecimento\n"
+        "- Prefira: Over 0.5 HT, Over 1.5 FT, Double Chance, Ambos Marcam\n"
+        "- Se realmente nao houver nenhuma opcao segura, retorne sem_entrada true\n\n"
+        "Responda SOMENTE JSON sem markdown:\n"
+        "{\"sem_entrada\": false, \"tipo\": \"simples\", \"odd_total\": 1.55, \"confianca\": 8, "
+        "\"bilhete\": [{\"jogo\": \"Time A x Time B\", \"liga\": \"Liga X\", "
+        "\"mercado\": \"Over 1.5 gols FT\", \"odd\": 1.55, \"motivo\": \"Motivo curto\"}]}"
+    )
 
     try:
         response = client.models.generate_content(
@@ -219,116 +201,88 @@ Responda SOMENTE com JSON válido, sem markdown:
         texto = response.text.strip().replace("```json", "").replace("```", "").strip()
         return json.loads(texto)
     except Exception as e:
-        return {"sem_entrada": True, "motivo": f"Erro na IA: {str(e)}"}
+        return {"sem_entrada": True, "motivo": "Erro: " + str(e)}
 
 
-# =====================================================
-# TELA PRINCIPAL
-# =====================================================
 def tela_alavancagem():
     init_estado()
+    api_key = st.secrets["API_KEY"]
 
-    # Pega headers do main via secrets
-    import requests as req
-    headers = {
-        "x-rapidapi-key": st.secrets["API_KEY"],
-        "x-rapidapi-host": "v3.football.api-sports.io"
-    }
+    st.subheader("Alavancagem Progressiva")
+    st.markdown("IA analisa 1 entrada por vez com odds reais. Bilhetes simples ou combinados de 2 jogos.")
 
-    st.subheader("🚀 Alavancagem Progressiva")
-    st.markdown("A IA analisa **1 entrada por vez** com odds reais, usando bilhetes simples ou combinados de 2 jogos.")
-
-    # ── CONFIGURAÇÃO ──────────────────────────────
     if not st.session_state.alav_ativa:
-        st.markdown("### ⚙️ Configurar")
 
+        st.markdown("### Configurar")
         col1, col2, col3 = st.columns(3)
         with col1:
-            banca = st.number_input("💰 Banca inicial (R$)", min_value=1.0, max_value=10000.0,
-                                     value=float(st.session_state.alav_banca_inicial), step=1.0)
+            banca = st.number_input("Banca inicial (R$)", min_value=1.0,
+                                     max_value=10000.0, value=float(st.session_state.alav_banca_inicial), step=1.0)
         with col2:
-            odd = st.number_input("📈 Odd alvo do bilhete", min_value=1.1, max_value=3.0,
+            odd = st.number_input("Odd alvo", min_value=1.1, max_value=3.0,
                                    value=float(st.session_state.alav_odd_alvo), step=0.05)
         with col3:
-            total = st.number_input("🎯 Total de entradas", min_value=3, max_value=20,
+            total = st.number_input("Total de entradas", min_value=3, max_value=20,
                                      value=int(st.session_state.alav_total_entradas), step=1)
 
         col4, col5 = st.columns(2)
         with col4:
-            odd_min = st.slider("Odd mínima", 1.2, 1.8, float(st.session_state.alav_odd_min), 0.05)
+            odd_min = st.slider("Odd minima", 1.2, 1.8, float(st.session_state.alav_odd_min), 0.05)
         with col5:
-            odd_max = st.slider("Odd máxima", 1.5, 2.5, float(st.session_state.alav_odd_max), 0.05)
+            odd_max = st.slider("Odd maxima", 1.5, 2.5, float(st.session_state.alav_odd_max), 0.05)
 
-        # Preview progressão
-        st.markdown("### 👁️ Preview da Progressão")
+        st.markdown("### Preview")
         preview = calcular_tabela(banca, odd, int(total))
-
-        col_h = st.columns([1, 2, 2, 2, 2])
-        for txt, c in zip(["#", "Entrada", "Odd", "Retorno", "Lucro"], col_h):
-            c.markdown(f"**{txt}**")
-
+        cols = st.columns([1, 2, 2, 2, 2])
+        for h, c in zip(["#", "Entrada", "Odd", "Retorno", "Lucro"], cols):
+            c.markdown("**" + h + "**")
         for row in preview:
             cols = st.columns([1, 2, 2, 2, 2])
-            cols[0].markdown(f"**{row['entrada']}**")
-            cols[1].markdown(f"R$ {row['valor']:.2f}")
-            cols[2].markdown(f"{row['odd']}x")
-            cols[3].markdown(f"R$ {row['retorno']:.2f}")
-            cols[4].markdown(f"🟢 +R$ {row['lucro']:.2f}")
+            cols[0].write(str(row["entrada"]))
+            cols[1].write("R$ " + str(row["valor"]))
+            cols[2].write(str(row["odd"]) + "x")
+            cols[3].write("R$ " + str(row["retorno"]))
+            cols[4].write("+R$ " + str(row["lucro"]))
 
         lucro_total = round(preview[-1]["retorno"] - banca, 2)
-        st.markdown(f"""
-        <div style='background:linear-gradient(135deg,#0a1a0a,#1a3a1a);
-        border:2px solid #22c55e;border-radius:16px;padding:20px;text-align:center;margin:16px 0'>
-        <p style='color:#94a3b8;margin:0'>Se acertar todas as {int(total)} entradas</p>
-        <p style='color:#22c55e;font-size:2rem;font-weight:800;margin:8px 0'>R$ {preview[-1]['retorno']:.2f}</p>
-        <p style='color:#4ade80'>Lucro total: +R$ {lucro_total:.2f}</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.success(
+            "Acertando tudo: R$ " + str(preview[-1]["retorno"]) +
+            " | Lucro: +R$ " + str(lucro_total)
+        )
 
         st.markdown("---")
-
-        if st.button("🤖 INICIAR — Buscar jogos e primeira entrada", use_container_width=True):
+        if st.button("INICIAR", use_container_width=True):
             st.session_state.alav_banca_inicial = banca
             st.session_state.alav_odd_alvo = odd
             st.session_state.alav_total_entradas = int(total)
             st.session_state.alav_odd_min = odd_min
             st.session_state.alav_odd_max = odd_max
 
-            with st.spinner("🔍 Varrendo jogos e buscando odds reais..."):
-                jogos = varrer_jogos_com_odds(headers)
+            with st.spinner("Varrendo jogos e buscando odds..."):
+                jogos = varrer_jogos(api_key)
+                if not jogos:
+                    st.error("Nenhum jogo encontrado hoje.")
+                    return
+                jogos_com_odds = buscar_odds_todos(jogos, api_key)
+                st.session_state.alav_jogos = jogos_com_odds
 
-                # Busca odds reais para cada jogo
-                jogos_com_odds = []
-                for j in jogos[:40]:  # Limita chamadas
-                    odds = buscar_odds_jogo(j["id"], headers)
-                    j["odds_texto"] = formatar_odds_para_ia(odds)
-                    j["odds_dict"] = odds
-                    jogos_com_odds.append(j)
-
-                st.session_state.alav_jogos_disponiveis = jogos_com_odds
-
-            # Monta tabela base
             tabela = calcular_tabela(banca, odd, int(total))
             st.session_state.alav_entradas = tabela
             st.session_state.alav_ativa = True
             st.session_state.alav_entrada_atual = 0
             st.rerun()
 
-    # ── ALAVANCAGEM ATIVA ─────────────────────────
     else:
         entradas = st.session_state.alav_entradas
-        atual    = st.session_state.alav_entrada_atual
-        jogos    = st.session_state.alav_jogos_disponiveis
+        atual = st.session_state.alav_entrada_atual
+        jogos = st.session_state.alav_jogos
 
-        # Métricas
         greens = sum(1 for e in entradas if e["status"] is True)
-        reds   = sum(1 for e in entradas if e["status"] is False)
-        pend   = sum(1 for e in entradas if e["status"] is None)
-
+        reds = sum(1 for e in entradas if e["status"] is False)
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("✅ Greens", greens)
-        col2.metric("❌ Reds", reds)
-        col3.metric("⏳ Pendentes", pend)
+        col1.metric("Greens", greens)
+        col2.metric("Reds", reds)
+        col3.metric("Pendentes", sum(1 for e in entradas if e["status"] is None))
 
         banca_atual = st.session_state.alav_banca_inicial
         for e in entradas:
@@ -337,19 +291,18 @@ def tela_alavancagem():
             elif e["status"] is False:
                 banca_atual = 0
                 break
-        col4.metric("💰 Banca Atual", f"R$ {banca_atual:.2f}")
+        col4.metric("Banca Atual", "R$ " + str(round(banca_atual, 2)))
 
         st.markdown("---")
 
-        # Entrada atual — busca IA
+        # Entrada atual
         if atual < len(entradas) and entradas[atual]["status"] is None:
             entrada_info = entradas[atual]
 
-            # Se o bilhete ainda não foi gerado pela IA
             if not entrada_info.get("bilhete"):
-                with st.spinner(f"🤖 IA analisando melhor entrada #{atual + 1}..."):
+                with st.spinner("IA analisando entrada #" + str(atual + 1) + "..."):
                     historico = [e for e in entradas if e["status"] is not None]
-                    resultado = ia_selecionar_proxima_entrada(
+                    resultado = ia_proxima_entrada(
                         jogos,
                         st.session_state.alav_odd_min,
                         st.session_state.alav_odd_max,
@@ -359,22 +312,21 @@ def tela_alavancagem():
                     )
 
                 if resultado.get("sem_entrada"):
-                    st.markdown(f"""
-                    <div style='background:linear-gradient(135deg,#1a1000,#2a1500);
-                    border:2px solid #f59e0b;border-radius:16px;padding:24px;text-align:center;margin:16px 0'>
-                    <h2 style='color:#f59e0b'>⛔ Sem entrada segura hoje</h2>
-                    <p style='color:#e2e8f0'>{resultado.get('motivo', 'A IA não encontrou jogos seguros no momento.')}</p>
-                    <p style='color:#94a3b8;font-size:0.9rem'>Recomendação: Pause hoje e volte amanhã.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    if st.button("🔄 Tentar novamente mais tarde"):
-                        # Limpa bilhete para tentar de novo
-                        st.rerun()
+                    st.warning("**Sem entrada segura agora**")
+                    st.info(resultado.get("motivo", "Nenhum jogo adequado encontrado."))
+                    st.caption("Recomendacao: Pause e tente mais tarde ou amanha.")
+                    col_t1, col_t2 = st.columns(2)
+                    with col_t1:
+                        if st.button("Tentar novamente", use_container_width=True):
+                            st.rerun()
+                    with col_t2:
+                        if st.button("Nova Alavancagem", key="nova_sem", use_container_width=True):
+                            for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos"]:
+                                st.session_state.pop(k, None)
+                            st.rerun()
                     return
 
-                # Salva bilhete gerado
-                odd_total = resultado.get("odd_total", st.session_state.alav_odd_alvo)
+                odd_total = float(resultado.get("odd_total", st.session_state.alav_odd_alvo))
                 retorno = round(entrada_info["valor"] * odd_total, 2)
                 st.session_state.alav_entradas[atual]["bilhete"] = resultado.get("bilhete", [])
                 st.session_state.alav_entradas[atual]["odd"] = odd_total
@@ -384,102 +336,64 @@ def tela_alavancagem():
                 st.session_state.alav_entradas[atual]["tipo"] = resultado.get("tipo", "simples")
                 st.rerun()
 
-            # Exibe entrada atual
             entrada_info = entradas[atual]
             tipo = entrada_info.get("tipo", "simples")
-            confianca = entrada_info.get("confianca", 0)
-            cor_conf = "#22c55e" if confianca >= 8 else "#f59e0b" if confianca >= 6 else "#ef4444"
+            conf = entrada_info.get("confianca", 0)
 
-            st.markdown(f"""
-            <div style='background:linear-gradient(135deg,#1a0a2e,#2d1b69);
-            border:2px solid #f59e0b;border-radius:16px;padding:20px;margin:10px 0'>
-            <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px'>
-                <span style='color:#f59e0b;font-size:1.2rem;font-weight:800'>⭐ ENTRADA #{entrada_info['entrada']}</span>
-                <span style='color:#e2e8f0;font-size:1rem'>R$ {entrada_info['valor']:.2f} → R$ {entrada_info['retorno']:.2f}</span>
-            </div>
-            <div style='display:flex;gap:12px;margin-bottom:12px'>
-                <span style='background:#1e293b;padding:4px 12px;border-radius:999px;color:#a78bfa;font-size:0.85rem'>
-                {"🎯 Combinada 2 jogos" if tipo == "combinada" else "🎲 Simples"}</span>
-                <span style='background:#1e293b;padding:4px 12px;border-radius:999px;color:#38bdf8;font-size:0.85rem'>
-                Odd: {entrada_info['odd']}x</span>
-                <span style='background:#1e293b;padding:4px 12px;border-radius:999px;color:{cor_conf};font-size:0.85rem'>
-                Confiança: {confianca}/10</span>
-            </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                "#### Entrada #" + str(entrada_info["entrada"]) +
+                " — " + ("Combinada 2 jogos" if tipo == "combinada" else "Simples")
+            )
+            st.markdown(
+                "**R$ " + str(entrada_info["valor"]) + "** @ **" +
+                str(entrada_info["odd"]) + "x** → **R$ " + str(entrada_info["retorno"]) + "**" +
+                "  |  Confianca: " + str(conf) + "/10"
+            )
 
-            # Jogos do bilhete
             for b in entrada_info.get("bilhete", []):
-                st.markdown(f"""
-                <div style='background:#0f172a;border:1px solid #1e3a5f;border-radius:12px;padding:16px;margin:8px 0'>
-                <p style='color:#e2e8f0;font-weight:600;margin:0 0 4px'>{b.get('jogo','')}</p>
-                <p style='color:#94a3b8;font-size:0.8rem;margin:0 0 4px'>{b.get('liga','')}</p>
-                <p style='color:#a78bfa;margin:0 0 4px'>🎯 {b.get('mercado','')} <span style='color:#38bdf8;font-weight:700'>@ {b.get('odd','')}</span></p>
-                <p style='color:#64748b;font-size:0.85rem;margin:0'>💡 {b.get('motivo','')}</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.info(
+                    "**" + b.get("jogo", "") + "**  |  " + b.get("liga", "") + "\n\n" +
+                    "Aposta: **" + b.get("mercado", "") + "** @ " + str(b.get("odd", "")) + "\n\n" +
+                    "Motivo: " + b.get("motivo", "")
+                )
 
-            # Botões resultado
-            st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("✅ GREEN — Acertei!", key=f"green_{atual}", use_container_width=True):
+                if st.button("GREEN - Acertei!", key="green_" + str(atual), use_container_width=True):
                     st.session_state.alav_entradas[atual]["status"] = True
                     st.session_state.alav_entradas[atual]["data"] = datetime.now().strftime("%d/%m %H:%M")
                     st.session_state.alav_entrada_atual = atual + 1
                     st.rerun()
             with c2:
-                if st.button("❌ RED — Errei", key=f"red_{atual}", use_container_width=True):
+                if st.button("RED - Errei", key="red_" + str(atual), use_container_width=True):
                     st.session_state.alav_entradas[atual]["status"] = False
                     st.session_state.alav_entradas[atual]["data"] = datetime.now().strftime("%d/%m %H:%M")
                     st.session_state.alav_entrada_atual = len(entradas)
                     st.rerun()
 
         st.markdown("---")
-        st.markdown("### 📋 Histórico das Entradas")
+        st.markdown("### Historico")
 
-        # Histórico de entradas anteriores
-        for i, entrada in enumerate(entradas):
-            if entrada["status"] is None and i >= atual:
-                continue  # Não mostra futuras
-
-            status = entrada["status"]
-            if status is True:
-                cor, emoji = "#22c55e", "✅"
-            elif status is False:
-                cor, emoji = "#ef4444", "❌"
-            else:
+        for entrada in entradas:
+            if entrada["status"] is None:
                 continue
+            linha = "#" + str(entrada["entrada"]) + " | R$ " + str(entrada["valor"]) + " -> R$ " + str(entrada["retorno"])
+            for b in entrada.get("bilhete", []):
+                linha += " | " + b.get("jogo", "") + " - " + b.get("mercado", "")
+            if entrada["status"] is True:
+                st.success(linha)
+            else:
+                st.error(linha)
 
-            st.markdown(f"""
-            <div style='background:#0f172a;border:1px solid {cor};border-radius:12px;padding:14px;margin:6px 0'>
-            <div style='display:flex;justify-content:space-between'>
-                <span style='color:{cor};font-weight:700'>{emoji} #{entrada['entrada']}</span>
-                <span style='color:#e2e8f0'>R$ {entrada['valor']:.2f} → R$ {entrada['retorno']:.2f}</span>
-                <span style='color:#64748b;font-size:0.8rem'>{entrada.get('data','')}</span>
-            </div>
-            {"".join([f"<p style='color:#94a3b8;font-size:0.85rem;margin:4px 0 0'>{b.get('jogo','')} — {b.get('mercado','')} @ {b.get('odd','')}</p>" for b in entrada.get('bilhete',[])])}
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Resultado final
         if atual >= len(entradas):
             if all(e["status"] is True for e in entradas):
                 retorno_final = entradas[-1]["retorno"]
                 lucro = round(retorno_final - st.session_state.alav_banca_inicial, 2)
-                st.markdown(f"""
-                <div style='background:linear-gradient(135deg,#0a1a0a,#1a3a1a);
-                border:2px solid #22c55e;border-radius:16px;padding:24px;text-align:center;margin:16px 0'>
-                <h2 style='color:#22c55e'>🏆 ALAVANCAGEM COMPLETA!</h2>
-                <p style='color:#e2e8f0;font-size:1.5rem'>R$ {retorno_final:.2f}</p>
-                <p style='color:#4ade80'>Lucro: +R$ {lucro:.2f}</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.success("COMPLETO! R$ " + str(retorno_final) + " | Lucro: +R$ " + str(lucro))
             else:
-                st.markdown("""
-                <div style='background:linear-gradient(135deg,#1a0a0a,#3a1a1a);
-                border:2px solid #ef4444;border-radius:16px;padding:24px;text-align:center;margin:16px 0'>
-                <h2 style='color:#ef4444'>❌ Alavancagem Encerrada</h2>
-                <p style='color:#e2e8f0'>Uma entrada foi perdida. Recomece com a banca inicial.</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.error("Encerrada. Recomece com a banca inicial.")
+
+        if st.button("Nova Alavancagem", use_container_width=True):
+            for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos"]:
+                st.session_state.pop(k, None)
+            st.rerun()
