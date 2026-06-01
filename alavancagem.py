@@ -113,8 +113,7 @@ def buscar_odds_evento(event_id, odds_api_key):
 
         st.warning("DEBUG ODDS API")
         st.json(data)
-
-            return ""
+             return ""
         st.write(data)
         bookmakers = data.get("bookmakers", {})
         if not bookmakers:
