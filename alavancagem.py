@@ -21,7 +21,7 @@ LIGAS_VARREDURA = {
 }
 
 ODDS_API_BASE = "https://api.odds-api.io/v3"
-BOOKMAKERS = "Bet365,Unibet,SingBet"
+BOOKMAKERS = "Bet365,Unibet"
 
 
 def init_estado():
