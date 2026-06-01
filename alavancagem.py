@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from api_football import buscar_jogos_da_liga
 
 LIGAS_VARREDURA = {
@@ -62,14 +62,30 @@ def calcular_tabela(banca, odd, total):
     return tabela
 
 
+def jogo_e_futuro(horario_str):
+    """Verifica se o jogo ainda não aconteceu."""
+    if not horario_str:
+        return True  # Se não tem data, inclui por segurança
+    try:
+        horario_str = str(horario_str).replace(" ", "T")
+        if not horario_str.endswith("Z") and "+" not in horario_str:
+            horario_str += "Z"
+        dt = datetime.fromisoformat(horario_str.replace("Z", "+00:00"))
+        agora = datetime.now(timezone.utc)
+        return dt > agora
+    except Exception:
+        return True
+
+
 def buscar_eventos(odds_api_key):
-    """Busca todos os eventos de futebol disponíveis."""
+    """Busca eventos de futebol FUTUROS."""
     try:
         r = requests.get(
             ODDS_API_BASE + "/events",
             params={
                 "apiKey": odds_api_key,
                 "sport": "football",
+                "status": "upcoming",
                 "limit": 100
             },
             timeout=15
@@ -80,22 +96,19 @@ def buscar_eventos(odds_api_key):
             return None, "erro_" + str(r.status_code)
         data = r.json()
         if isinstance(data, list):
-            return data, "ok"
-        return data.get("data", []), "ok"
+            eventos = data
+        else:
+            eventos = data.get("data", [])
+
+        # Filtra apenas jogos futuros
+        futuros = [ev for ev in eventos if jogo_e_futuro(ev.get("date", ev.get("start_time", "")))]
+        return futuros, "ok"
     except Exception as e:
         return None, str(e)
 
 
 def buscar_odds_evento(event_id, odds_api_key):
-    """
-    Busca odds de um evento.
-    Retorno da API:
-    {
-      "bookmakers": {
-        "Bet365": [{"name": "ML", "odds": [{"home": "2.10", "draw": "3.40", "away": "3.20"}]}]
-      }
-    }
-    """
+    """Busca odds reais de um evento."""
     try:
         r = requests.get(
             ODDS_API_BASE + "/odds",
@@ -110,15 +123,11 @@ def buscar_odds_evento(event_id, odds_api_key):
             return ""
 
         data = r.json()
-        st.warning("DEBUG ODDS API")
-        st.json(data)
-        st.write(data)
         bookmakers = data.get("bookmakers", {})
         if not bookmakers:
             return ""
 
         linhas = []
-        # Pega do primeiro bookmaker disponível
         for bk_nome, mercados in bookmakers.items():
             if not mercados:
                 continue
@@ -127,46 +136,44 @@ def buscar_odds_evento(event_id, odds_api_key):
                 odds_lista = mercado.get("odds", [])
                 if not odds_lista:
                     continue
-                odd_vals = odds_lista[0]  # Pega primeiro conjunto de odds
+                odd_vals = odds_lista[0]
 
                 if nome_mercado == "ML":
-                    linha = (
-                        "[" + bk_nome + "] 1x2: " +
-                        "Casa @ " + str(odd_vals.get("home", "")) + " | " +
-                        "Empate @ " + str(odd_vals.get("draw", "")) + " | " +
-                        "Fora @ " + str(odd_vals.get("away", ""))
-                    )
-                    linhas.append(linha)
+                    h = odd_vals.get("home", "")
+                    d = odd_vals.get("draw", "")
+                    a = odd_vals.get("away", "")
+                    if h and d and a:
+                        linhas.append(
+                            "[" + bk_nome + "] 1x2: Casa@" + str(h) +
+                            " | Empate@" + str(d) + " | Fora@" + str(a)
+                        )
 
-                elif nome_mercado in ["Over/Under", "OU", "Goals"]:
+                elif nome_mercado in ["Over/Under", "OU", "Goals", "Total Goals"]:
                     for k, v in odd_vals.items():
-                        linhas.append("[" + bk_nome + "] " + nome_mercado + " " + str(k) + " @ " + str(v))
+                        if v:
+                            linhas.append("[" + bk_nome + "] " + nome_mercado + " " + str(k) + "@" + str(v))
 
-                elif nome_mercado in ["BTTS", "Both Teams to Score"]:
-                    linha = (
-                        "[" + bk_nome + "] Ambos Marcam: " +
-                        "Sim @ " + str(odd_vals.get("yes", odd_vals.get("Sim", ""))) + " | " +
-                        "Nao @ " + str(odd_vals.get("no", odd_vals.get("Nao", "")))
-                    )
-                    linhas.append(linha)
+                elif nome_mercado in ["BTTS", "Both Teams to Score", "Ambos Marcam"]:
+                    sim = odd_vals.get("yes", odd_vals.get("Yes", odd_vals.get("Sim", "")))
+                    nao = odd_vals.get("no", odd_vals.get("No", odd_vals.get("Nao", "")))
+                    if sim and nao:
+                        linhas.append("[" + bk_nome + "] Ambos Marcam: Sim@" + str(sim) + " | Nao@" + str(nao))
 
                 elif nome_mercado == "DC":
-                    linha = (
-                        "[" + bk_nome + "] Double Chance: " +
-                        "1X @ " + str(odd_vals.get("1X", "")) + " | " +
-                        "12 @ " + str(odd_vals.get("12", "")) + " | " +
-                        "X2 @ " + str(odd_vals.get("X2", ""))
-                    )
-                    linhas.append(linha)
+                    x1 = odd_vals.get("1X", "")
+                    x12 = odd_vals.get("12", "")
+                    x2 = odd_vals.get("X2", "")
+                    if x1 or x12 or x2:
+                        linhas.append("[" + bk_nome + "] Double Chance: 1X@" + str(x1) + " | 12@" + str(x12) + " | X2@" + str(x2))
 
                 else:
-                    # Formato genérico
                     linha = "[" + bk_nome + "] " + nome_mercado + ": "
-                    linha += " | ".join(str(k) + " @ " + str(v) for k, v in odd_vals.items())
-                    linhas.append(linha)
+                    partes = [str(k) + "@" + str(v) for k, v in odd_vals.items() if v]
+                    if partes:
+                        linhas.append(linha + " | ".join(partes))
 
             if linhas:
-                break  # Apenas 1 bookmaker é suficiente
+                break  # 1 bookmaker é suficiente
 
         return "\n".join(linhas[:6])
     except Exception:
@@ -174,10 +181,9 @@ def buscar_odds_evento(event_id, odds_api_key):
 
 
 def buscar_todos_jogos_com_odds(odds_api_key):
-    """Busca eventos e odds reais da odds-api.io."""
+    """Busca APENAS jogos futuros com odds reais confirmadas."""
     jogos = []
 
-    # 1. Busca eventos
     eventos, status = buscar_eventos(odds_api_key)
 
     if status == "invalida":
@@ -187,17 +193,16 @@ def buscar_todos_jogos_com_odds(odds_api_key):
         st.warning("Erro ao conectar na Odds API: " + status)
         return jogos
     if not eventos:
-        st.warning("Nenhum evento retornado pela Odds API.")
+        st.warning("Nenhum evento futuro encontrado na Odds API.")
         return jogos
 
-    st.info("Odds API: " + str(len(eventos)) + " eventos encontrados. Buscando odds...")
+    st.info("Odds API: " + str(len(eventos)) + " jogos futuros. Buscando odds reais...")
 
-    # 2. Busca odds para cada evento
     prog = st.progress(0)
     txt = st.empty()
-    total = min(len(eventos), 50)
+    total = min(len(eventos), 60)
 
-    for i, ev in enumerate(eventos[:50]):
+    for i, ev in enumerate(eventos[:60]):
         prog.progress((i + 1) / total)
 
         event_id = ev.get("id", "")
@@ -207,82 +212,50 @@ def buscar_todos_jogos_com_odds(odds_api_key):
         liga = liga_info.get("name", "Futebol") if isinstance(liga_info, dict) else str(liga_info)
         horario = ev.get("date", ev.get("start_time", ""))
 
-        if not home or not away:
+        if not home or not away or not event_id:
             continue
 
         nome_jogo = str(home) + " x " + str(away)
-        txt.text("Odds: " + nome_jogo)
+        txt.text("Buscando odds: " + nome_jogo)
 
-        odds_txt = buscar_odds_evento(event_id, odds_api_key) if event_id else ""
+        odds_txt = buscar_odds_evento(event_id, odds_api_key)
 
-        jogos.append({
-            "nome": nome_jogo,
-            "liga_nome": str(liga),
-            "odds_txt": odds_txt,
-            "tem_odds": bool(odds_txt),
-            "id": str(event_id),
-            "horario": str(horario)[:16].replace("T", " ") if horario else ""
-        })
+        # SÓ adiciona se tiver odds reais confirmadas
+        if odds_txt:
+            jogos.append({
+                "nome": nome_jogo,
+                "liga_nome": str(liga),
+                "odds_txt": odds_txt,
+                "tem_odds": True,
+                "id": str(event_id),
+                "horario": str(horario)[:16].replace("T", " ") if horario else ""
+            })
 
     prog.empty()
     txt.empty()
 
-    com_odds = sum(1 for j in jogos if j["tem_odds"])
-    st.success(
-        "Odds API: " + str(len(jogos)) + " jogos | " +
-        str(com_odds) + " com odds reais | " +
-        str(len(jogos) - com_odds) + " sem odds"
-    )
+    st.success("Odds API: " + str(len(jogos)) + " jogos futuros com odds reais confirmadas!")
     return jogos
-
-
-def varrer_jogos_api_football(api_key):
-    """Busca jogos adicionais via API Football."""
-    todos = []
-    prog = st.progress(0)
-    txt = st.empty()
-    ligas = list(LIGAS_VARREDURA.items())
-    for i, (nome, league_id) in enumerate(ligas):
-        txt.text("Buscando " + nome + "...")
-        prog.progress((i + 1) / len(ligas))
-        try:
-            jogos = buscar_jogos_da_liga(league_id)
-            for j in jogos:
-                j["liga_nome"] = nome
-                j["tem_odds"] = False
-                j["odds_txt"] = ""
-            todos.extend(jogos)
-        except Exception:
-            pass
-    prog.empty()
-    txt.empty()
-    return todos
 
 
 def ia_proxima_entrada(jogos, odd_min, odd_max, num_entrada, banca, historico):
     from google import genai
     client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-    com_odds = [j for j in jogos if j.get("tem_odds")]
-    sem_odds = [j for j in jogos if not j.get("tem_odds")]
+    if not jogos:
+        return {"sem_entrada": True, "motivo": "Nenhum jogo com odds reais disponivel."}
 
-    ctx_jogos = ""
-    if com_odds:
-        ctx_jogos += "JOGOS COM ODDS REAIS (" + str(len(com_odds)) + " jogos):\n"
-        for j in com_odds[:25]:
-            ctx_jogos += "\nJogo: " + j.get("nome", "")
-            ctx_jogos += " | Liga: " + j.get("liga_nome", "")
-            if j.get("horario"):
-                ctx_jogos += " | " + j.get("horario", "")
-            ctx_jogos += "\n" + j.get("odds_txt", "") + "\n"
-
-    ctx_jogos += "\nOUTROS JOGOS - estime as odds (" + str(len(sem_odds)) + "):\n"
-    for j in sem_odds[:10]:
-        ctx_jogos += "- " + j.get("nome", "") + " | " + j.get("liga_nome", "") + "\n"
+    ctx_jogos = "JOGOS COM ODDS REAIS (" + str(len(jogos)) + " jogos):\n"
+    for j in jogos[:30]:
+        ctx_jogos += "\nJogo: " + j.get("nome", "")
+        ctx_jogos += " | Liga: " + j.get("liga_nome", "")
+        if j.get("horario"):
+            ctx_jogos += " | Horario: " + j.get("horario", "")
+        ctx_jogos += "\n" + j.get("odds_txt", "") + "\n"
 
     ctx_hist = ""
     if historico:
-        ctx_hist = "\nHistorico:\n"
+        ctx_hist = "\nHistorico desta alavancagem:\n"
         for h in historico:
             s = "GREEN" if h["status"] is True else "RED"
             for b in h.get("bilhete", []):
@@ -296,18 +269,18 @@ def ia_proxima_entrada(jogos, odd_min, odd_max, num_entrada, banca, historico):
         "Odd alvo: entre " + str(odd_min) + "x e " + str(odd_max) + "x\n"
         + ctx_hist + "\n"
         + ctx_jogos + "\n"
-        "INSTRUCOES:\n"
-        "1. Selecione: simples (1 jogo) ou combinada (2 jogos de ligas diferentes)\n"
-        "2. Odd final entre " + str(odd_min) + "x e " + str(odd_max) + "x\n"
-        "3. Para jogos com odds reais: use os valores EXATOS da lista\n"
-        "4. Para jogos sem odds: estime com seu conhecimento\n"
-        "5. Prefira: Over 1.5 FT, Double Chance, Ambos Marcam, favorito\n"
-        "6. Retorne sem_entrada=true SOMENTE se genuinamente nao tiver confianca\n\n"
+        "INSTRUCOES OBRIGATORIAS:\n"
+        "1. Use APENAS os jogos listados acima - todos tem odds reais confirmadas\n"
+        "2. Use APENAS as odds EXATAS mostradas - NUNCA invente odds\n"
+        "3. Selecione: simples (1 jogo) ou combinada (2 jogos de ligas diferentes)\n"
+        "4. Odd final DEVE estar entre " + str(odd_min) + "x e " + str(odd_max) + "x\n"
+        "5. Prefira mercados seguros: Double Chance, Over 1.5 FT, Ambos Marcam Sim\n"
+        "6. Retorne sem_entrada=true SOMENTE se nenhum jogo tiver confianca suficiente\n\n"
         "Responda SOMENTE JSON sem markdown:\n"
         "{\"sem_entrada\": false, \"tipo\": \"simples\", \"odd_total\": 1.55, \"confianca\": 8, "
         "\"motivo_recusa\": \"\", "
         "\"bilhete\": [{\"jogo\": \"Time A x Time B\", \"liga\": \"Liga X\", "
-        "\"mercado\": \"Over 1.5 gols FT\", \"odd\": 1.55, \"motivo\": \"Motivo curto\"}]}"
+        "\"mercado\": \"Double Chance 1X\", \"odd\": 1.30, \"motivo\": \"Favorito em casa\"}]}"
     )
 
     try:
@@ -327,7 +300,7 @@ def tela_alavancagem():
     odds_api_key = st.secrets.get("ODDS_API_KEY", "")
 
     st.subheader("Alavancagem Progressiva")
-    st.markdown("IA analisa 1 entrada por vez com odds reais de Bet365, Unibet e mais.")
+    st.markdown("IA analisa 1 entrada por vez com **odds reais** confirmadas. Somente jogos futuros.")
 
     if not st.session_state.alav_ativa:
 
@@ -377,29 +350,17 @@ def tela_alavancagem():
             st.session_state.alav_odd_min = odd_min
             st.session_state.alav_odd_max = odd_max
 
-            todos_jogos = []
-
-            if odds_api_key:
-                jogos_odds = buscar_todos_jogos_com_odds(odds_api_key)
-                todos_jogos.extend(jogos_odds)
-            else:
-                st.warning("ODDS_API_KEY nao configurada nos Secrets.")
-
-            with st.spinner("Buscando jogos adicionais via API Football..."):
-                jogos_af = varrer_jogos_api_football(api_key)
-                nomes_ja = {j.get("nome", "") for j in todos_jogos}
-                novos = [j for j in jogos_af if j.get("nome", "") not in nomes_ja]
-                todos_jogos.extend(novos)
-
-            if not todos_jogos:
-                st.error("Nenhum jogo encontrado.")
+            if not odds_api_key:
+                st.error("ODDS_API_KEY nao configurada nos Secrets. Configure e tente novamente.")
                 return
 
-            com_odds = sum(1 for j in todos_jogos if j.get("tem_odds"))
-            st.success(str(len(todos_jogos)) + " jogos no total | " +
-                       str(com_odds) + " com odds reais")
+            jogos = buscar_todos_jogos_com_odds(odds_api_key)
 
-            st.session_state.alav_jogos = todos_jogos
+            if not jogos:
+                st.error("Nenhum jogo futuro com odds reais encontrado. Tente mais tarde.")
+                return
+
+            st.session_state.alav_jogos = jogos
             tabela = calcular_tabela(banca, odd, int(total))
             st.session_state.alav_entradas = tabela
             st.session_state.alav_ativa = True
@@ -433,7 +394,7 @@ def tela_alavancagem():
             entrada_info = entradas[atual]
 
             if not entrada_info.get("bilhete"):
-                with st.spinner("IA analisando odds e escolhendo entrada #" + str(atual + 1) + "..."):
+                with st.spinner("IA analisando odds reais e escolhendo entrada #" + str(atual + 1) + "..."):
                     historico = [e for e in entradas if e["status"] is not None]
                     resultado = ia_proxima_entrada(
                         jogos,
@@ -480,12 +441,12 @@ def tela_alavancagem():
                 "**R$ " + str(entrada_info["valor"]) + "** @ **" +
                 str(entrada_info["odd"]) + "x** → **R$ " +
                 str(entrada_info["retorno"]) + "**" +
-                "  |  Confianca: " + str(conf) + "/10"
+                " | Confianca: " + str(conf) + "/10"
             )
 
             for b in entrada_info.get("bilhete", []):
                 st.info(
-                    "**" + b.get("jogo", "") + "**  |  " + b.get("liga", "") + "\n\n" +
+                    "**" + b.get("jogo", "") + "** | " + b.get("liga", "") + "\n\n" +
                     "Aposta: **" + b.get("mercado", "") + "** @ " + str(b.get("odd", "")) + "\n\n" +
                     "Motivo: " + b.get("motivo", "")
                 )
@@ -522,4 +483,11 @@ def tela_alavancagem():
             if all(e["status"] is True for e in entradas):
                 retorno_final = entradas[-1]["retorno"]
                 lucro = round(retorno_final - st.session_state.alav_banca_inicial, 2)
-  
+                st.success("COMPLETO! R$ " + str(retorno_final) + " | Lucro: +R$ " + str(lucro))
+            else:
+                st.error("Encerrada. Recomece com a banca inicial.")
+
+        if st.button("Nova Alavancagem", use_container_width=True):
+            for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos"]:
+                st.session_state.pop(k, None)
+            st.rerun()
