@@ -110,7 +110,6 @@ def buscar_odds_evento(event_id, odds_api_key):
             return ""
 
         data = r.json()
-
         st.warning("DEBUG ODDS API")
         st.json(data)
              return ""
