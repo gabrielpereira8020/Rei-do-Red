@@ -91,11 +91,7 @@ def buscar_odds_evento(event_id, odds_api_key):
     Busca odds de um evento.
     Retorno da API:
     {
-      "bookmakers": {
-        "Bet365": [{"name": "ML", "odds": [{"home": "2.10", "draw": "3.40", "away": "3.20"}]}]
-      }
-    }
-    """
+      "bookmakers": ""
     try:
         r = requests.get(
             ODDS_API_BASE + "/odds",
@@ -110,6 +106,7 @@ def buscar_odds_evento(event_id, odds_api_key):
             return ""
 
         data = r.json()
+        st.write(data)
         bookmakers = data.get("bookmakers", {})
         if not bookmakers:
             return ""
