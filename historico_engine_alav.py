@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/historico_engine.py << 'EOF'
 import streamlit as st
 import pandas as pd
 from datetime import datetime
