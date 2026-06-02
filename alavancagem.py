@@ -1,3 +1,27 @@
+"""
+alavancagem.py
+==============
+Motor principal da Alavancagem Progressiva.
+
+NOVA ARQUITETURA — 4 ETAPAS:
+
+  ETAPA 1 — API Football busca jogos + stats reais
+            ↓
+  ETAPA 2 — ranking_engine pontua por estatísticas (sem odds)
+            ↓
+  ETAPA 3 — IA escolhe mercado ideal para cada jogo aprovado
+            ↓
+  ETAPA 4 — Odds API busca odds APENAS dos jogos aprovados pela IA
+            ↓
+  ETAPA 5 — IA valida a odd real e monta o bilhete final
+
+Correções aplicadas:
+  - Debug prints removidos
+  - supabase passado corretamente
+  - Contagem real de chamadas de API
+  - Score mínimo configurável com aviso explicativo
+"""
+
 import streamlit as st
 import json
 from datetime import datetime
@@ -8,9 +32,9 @@ from ranking_engine_alav import ranquear_jogos_por_stats, filtrar_top_para_ia, v
 from historico_engine_alav import salvar_entrada, exibir_painel_aprendizado
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # ESTADO
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def init_estado():
     defaults = {
@@ -38,9 +62,9 @@ def log_etapa(msg):
     st.session_state["alav_log_etapas"].append(f"[{ts}] {msg}")
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # TABELA DE ALAVANCAGEM
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def calcular_tabela(banca, odd, total):
     tabela = []
@@ -63,9 +87,9 @@ def calcular_tabela(banca, odd, total):
     return tabela
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # ETAPA 2 — IA ESCOLHE MERCADO (sem odds ainda)
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def ia_escolher_mercado(jogo):
     """
@@ -116,9 +140,9 @@ def ia_escolher_mercado(jogo):
         return {"mercado": "", "confianca": 0, "motivo": f"Erro IA: {e}", "recusar": True}
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # ETAPA 5 — IA MONTA BILHETE FINAL
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banca, historico):
     """
@@ -182,9 +206,9 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
         return {"sem_entrada": True, "motivo": f"Erro IA bilhete: {e}"}
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # PIPELINE COMPLETO DAS 4 ETAPAS
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=30):
     """
@@ -192,9 +216,9 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
     """
     stats_init(api_key)
 
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     # ETAPA 1 — API Football: jogos + stats reais
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     etapa1 = st.empty()
     etapa1.info("⚽ **Etapa 1/4** — Buscando jogos e estatísticas na API Football...")
     log_etapa("Etapa 1: buscando jogos futuros na API Football")
@@ -212,9 +236,9 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         enriquecer_stats_jogo(jogo)
     prog1.empty()
 
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     # ETAPA 2 — Ranking por estatísticas
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     etapa1.info("📊 **Etapa 2/4** — Ranqueando jogos por estatísticas (sem odds ainda)...")
     log_etapa("Etapa 2: ranqueando por stats")
 
@@ -230,9 +254,9 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         )
         return []
 
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     # ETAPA 3 — IA escolhe mercado (sem odds)
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     etapa1.info(f"🤖 **Etapa 3/4** — IA analisando {len(top_jogos)} jogos e escolhendo mercados...")
     log_etapa(f"Etapa 3: IA analisando {len(top_jogos)} jogos")
 
@@ -264,9 +288,9 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         )
         return []
 
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     # ETAPA 4 — Odds API apenas para jogos aprovados
-    # ──────────────────────────────────────────
+    # ------------------------------------------
     etapa1.info(
         f"💰 **Etapa 4/4** — Buscando odds APENAS para os {len(jogos_aprovados_ia)} jogos aprovados..."
     )
@@ -331,9 +355,9 @@ def _extrair_melhor_odd(odds_txt, odd_min, odd_max):
     return None
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # TELA PRINCIPAL
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def tela_alavancagem(supabase=None):
     init_estado()
@@ -370,9 +394,9 @@ def tela_alavancagem(supabase=None):
             _tela_execucao(supabase)
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # TELA DE CONFIGURAÇÃO
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def _tela_configuracao(api_key, odds_api_key, supabase):
     st.markdown("### ⚙️ Configurar")
@@ -478,9 +502,9 @@ A odd real é validada contra a faixa configurada.
         st.rerun()
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # TELA DE EXECUÇÃO
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def _tela_execucao(supabase):
     entradas = st.session_state.alav_entradas
