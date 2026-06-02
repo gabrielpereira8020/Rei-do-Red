@@ -42,8 +42,10 @@ LIGAS = {
     "Japao": {
         "J1 League": 98,
         "J2 League": 99
-    },
-    COMPETICOES_INTERNACIONAIS = {
+    }
+}
+
+COMPETICOES_INTERNACIONAIS = {
     "World Cup": 1,
     "UEFA Champions League": 2,
     "UEFA Europa League": 3,
@@ -57,5 +59,3 @@ LIGAS = {
     "International Friendlies": 9,
     "Club Friendlies": 667
 }
-    }
-
