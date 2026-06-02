@@ -169,5 +169,3 @@ def ranquear_jogos(jogos_com_stats, odd_min, odd_max):
 def filtrar_por_confianca(jogos_ranqueados, confianca_minima=70):
     """Filtra apenas jogos acima do threshold de confiança."""
     return [j for j in jogos_ranqueados if j["score"] >= confianca_minima]
-EOF
-python3 -c "import ast; ast.parse(open('/mnt/user-data/outputs/ranking_engine.py').read()); print('ranking_engine OK')"
