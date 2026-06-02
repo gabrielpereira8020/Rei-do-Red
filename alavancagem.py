@@ -401,4 +401,4 @@ def tela_alavancagem(supabase=None):
                 for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos"]:
                     st.session_state.pop(k, None)
                 st.rerun()
-                "import ast; ast.parse(open('/mnt/user-data/outputs/alavancagem.py').read()); print('alavancagem OK')"
+                
