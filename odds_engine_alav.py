@@ -200,5 +200,3 @@ def buscar_jogos_com_odds(odds_api_key, progress_callback=None):
     # Ordena por prioridade (ligas melhores primeiro)
     jogos.sort(key=lambda x: x["prioridade"])
     return jogos, "ok"
-EOF
-python3 -c "import ast; ast.parse(open('/mnt/user-data/outputs/odds_engine.py').read()); print('odds_engine OK')"
