@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/ranking_engine.py << 'EOF'
 import re
 
 # Pesos para o ranking de confiança
