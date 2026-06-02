@@ -1,171 +1,131 @@
 import re
 
-# Pesos para o ranking de confiança
-PESOS = {
-    "odd_segura": 25,       # Odd na faixa segura
-    "liga_elite": 20,       # Liga de alta prioridade
-    "forma_boa": 15,        # Time em boa forma
-    "gols_favor": 15,       # Boa média de gols marcados
-    "aprov_mandante": 10,   # Bom aproveitamento em casa
-    "h2h_favor": 10,        # H2H favorável
-    "sequencia_boa": 5,     # Sequência positiva
-}
+def calcular_score(jogo, odd_min, odd_max):
+    score = 0
+    detalhes = []
 
-def calcular_score_odd(odds_txt, odd_min, odd_max):
-    """Extrai odds do texto e verifica se estão na faixa alvo."""
+    # +20 Liga elite
+    prioridade = jogo.get("prioridade", 3)
+    if prioridade == 1:
+        score += 20
+        detalhes.append("Liga elite +20")
+    elif prioridade == 2:
+        score += 10
+        detalhes.append("Liga media +10")
+    else:
+        score += 5
+        detalhes.append("Outra liga +5")
+
+    # +20 Odds na faixa alvo
     odds_encontradas = []
     try:
-        # Extrai todos os valores de odd do texto
-        matches = re.findall(r'@([\d.]+)', odds_txt)
+        matches = re.findall(r'@([\d.]+)', jogo.get("odds_txt", ""))
         for m in matches:
             try:
-                odds_encontradas.append(float(m))
+                v = float(m)
+                if odd_min <= v <= odd_max:
+                    odds_encontradas.append(v)
             except Exception:
                 pass
     except Exception:
         pass
 
-    # Verifica se alguma odd está na faixa alvo
-    odds_na_faixa = [o for o in odds_encontradas if odd_min <= o <= odd_max]
-    if odds_na_faixa:
-        # Quanto mais próxima do meio da faixa, melhor
-        meio = (odd_min + odd_max) / 2
-        melhor = min(odds_na_faixa, key=lambda x: abs(x - meio))
-        # Pontuação baseada na faixa
+    if odds_encontradas:
+        melhor = min(odds_encontradas, key=lambda x: abs(x - ((odd_min + odd_max) / 2)))
+        jogo["melhor_odd"] = melhor
         if melhor <= 1.35:
-            return PESOS["odd_segura"], melhor, "muito_segura"
+            score += 20
+            jogo["faixa_odd"] = "muito_segura"
+            detalhes.append(f"Odd muito segura {melhor} +20")
         elif melhor <= 1.55:
-            return int(PESOS["odd_segura"] * 0.8), melhor, "segura"
+            score += 16
+            jogo["faixa_odd"] = "segura"
+            detalhes.append(f"Odd segura {melhor} +16")
         elif melhor <= 1.80:
-            return int(PESOS["odd_segura"] * 0.6), melhor, "moderada"
+            score += 10
+            jogo["faixa_odd"] = "moderada"
+            detalhes.append(f"Odd moderada {melhor} +10")
         else:
-            return int(PESOS["odd_segura"] * 0.3), melhor, "arriscada"
-    return 0, 0, "fora_da_faixa"
+            score += 4
+            jogo["faixa_odd"] = "arriscada"
+            detalhes.append(f"Odd arriscada {melhor} +4")
+    else:
+        jogo["melhor_odd"] = 0
+        jogo["faixa_odd"] = "sem_odd"
+
+    # +15 Double Chance disponível
+    odds_txt = jogo.get("odds_txt", "").lower()
+    if "double chance" in odds_txt or "1x" in odds_txt or "dc" in odds_txt:
+        score += 15
+        detalhes.append("Double Chance disponivel +15")
+
+    # +15 Over/Under disponível
+    if "over" in odds_txt or "under" in odds_txt or "o/u" in odds_txt:
+        score += 10
+        detalhes.append("Over/Under disponivel +10")
+
+    # +10 Ambos Marcam disponível
+    if "ambos" in odds_txt or "btts" in odds_txt or "both teams" in odds_txt:
+        score += 8
+        detalhes.append("BTTS disponivel +8")
+
+    # +20 Estatísticas (forma, gols, aproveitamento)
+    stats_txt = jogo.get("stats_txt", "")
+    if stats_txt:
+        # Forma boa (W W W)
+        vitorias = stats_txt.count(" W")
+        if vitorias >= 4:
+            score += 15
+            detalhes.append(f"Forma excelente {vitorias}V +15")
+        elif vitorias >= 3:
+            score += 10
+            detalhes.append(f"Boa forma {vitorias}V +10")
+        elif vitorias >= 2:
+            score += 5
+            detalhes.append(f"Forma razoavel {vitorias}V +5")
+
+        # Aproveitamento em casa
+        import re as re2
+        match_aprov = re2.search(r'casa.*?(\d+)%', stats_txt, re.IGNORECASE)
+        if match_aprov:
+            aprov = int(match_aprov.group(1))
+            if aprov >= 70:
+                score += 15
+                detalhes.append(f"Aproveitamento casa {aprov}% +15")
+            elif aprov >= 55:
+                score += 8
+                detalhes.append(f"Aproveitamento casa {aprov}% +8")
+            elif aprov >= 40:
+                score += 3
+                detalhes.append(f"Aproveitamento casa {aprov}% +3")
+
+        # Média de gols
+        match_gols = re2.search(r'marcados.*?([\d.]+)', stats_txt, re.IGNORECASE)
+        if match_gols:
+            try:
+                media = float(match_gols.group(1))
+                if media >= 2.0:
+                    score += 10
+                    detalhes.append(f"Media gols {media} +10")
+                elif media >= 1.5:
+                    score += 6
+                    detalhes.append(f"Media gols {media} +6")
+            except Exception:
+                pass
+
+    # Normaliza 0-100
+    score = min(100, score)
+    jogo["score"] = score
+    jogo["detalhes_score"] = detalhes
+    return score
 
 
-def calcular_score_forma(stats_home, stats_away):
-    """Pontuação baseada na forma recente dos times."""
-    score = 0
-    detalhes = []
-
-    if stats_home:
-        vit_home = stats_home.get("vit", 0)
-        if vit_home >= 3:
-            score += PESOS["forma_boa"]
-            detalhes.append("Mandante em boa forma")
-        elif vit_home >= 2:
-            score += int(PESOS["forma_boa"] * 0.6)
-
-        aprov = stats_home.get("aprov_home", 0)
-        if aprov >= 70:
-            score += PESOS["aprov_mandante"]
-            detalhes.append(f"Aproveitamento em casa: {aprov}%")
-        elif aprov >= 50:
-            score += int(PESOS["aprov_mandante"] * 0.5)
-
-        seq = stats_home.get("sequencia", "")
-        if "vitoria" in str(seq).lower():
-            score += PESOS["sequencia_boa"]
-            detalhes.append("Em sequencia de vitorias")
-
-    if stats_home:
-        try:
-            gols_marc = float(str(stats_home.get("gols_marcados", "0")).replace(",", "."))
-            gols_sofr = float(str(stats_home.get("gols_sofridos", "0")).replace(",", "."))
-            if gols_marc >= 1.5:
-                score += PESOS["gols_favor"]
-                detalhes.append(f"Media gols marcados: {gols_marc}")
-            if gols_sofr <= 1.0:
-                score += int(PESOS["gols_favor"] * 0.5)
-                detalhes.append(f"Defesa solida: {gols_sofr} sofridos")
-        except Exception:
-            pass
-
-    return score, detalhes
+def ranquear_jogos(jogos, odd_min, odd_max):
+    for jogo in jogos:
+        calcular_score(jogo, odd_min, odd_max)
+    jogos.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return jogos
 
 
-def calcular_score_h2h(h2h_list, nome_mandante):
-    """Pontuação baseada no histórico H2H."""
-    if not h2h_list:
-        return 0, []
-
-    vitorias_mandante = 0
-    for confronto in h2h_list:
-        if nome_mandante.lower() in confronto.lower():
-            partes = confronto.split(":")
-            if len(partes) > 1:
-                placar_parte = partes[1].strip()
-                numeros = re.findall(r'\d+', placar_parte)
-                if len(numeros) >= 2:
-                    try:
-                        if int(numeros[0]) > int(numeros[1]):
-                            vitorias_mandante += 1
-                    except Exception:
-                        pass
-
-    if vitorias_mandante >= 3:
-        return PESOS["h2h_favor"], [f"H2H favoravel: {vitorias_mandante}/5 vitorias"]
-    elif vitorias_mandante >= 2:
-        return int(PESOS["h2h_favor"] * 0.5), [f"H2H equilibrado: {vitorias_mandante}/5"]
-    return 0, []
-
-
-def ranquear_jogos(jogos_com_stats, odd_min, odd_max):
-    """
-    Recebe lista de jogos com stats e odds.
-    Retorna lista ordenada por score de confiança.
-    """
-    jogos_ranqueados = []
-
-    for jogo in jogos_com_stats:
-        score_total = 0
-        detalhes = []
-
-        # Score por liga
-        prioridade = jogo.get("prioridade", 3)
-        if prioridade == 1:
-            score_total += PESOS["liga_elite"]
-            detalhes.append("Liga elite")
-        elif prioridade == 2:
-            score_total += int(PESOS["liga_elite"] * 0.5)
-
-        # Score por odd
-        score_odd, melhor_odd, faixa = calcular_score_odd(
-            jogo.get("odds_txt", ""), odd_min, odd_max
-        )
-        score_total += score_odd
-        if melhor_odd:
-            detalhes.append(f"Melhor odd: {melhor_odd} ({faixa})")
-
-        # Score por forma e estatísticas
-        stats_home = jogo.get("stats_home", {})
-        stats_away = jogo.get("stats_away", {})
-        score_forma, det_forma = calcular_score_forma(stats_home, stats_away)
-        score_total += score_forma
-        detalhes.extend(det_forma)
-
-        # Score por H2H
-        h2h = jogo.get("h2h", [])
-        score_h2h, det_h2h = calcular_score_h2h(h2h, jogo.get("casa", ""))
-        score_total += score_h2h
-        detalhes.extend(det_h2h)
-
-        # Normaliza para 0-100
-        score_final = min(100, score_total)
-
-        jogos_ranqueados.append({
-            **jogo,
-            "score": score_final,
-            "melhor_odd": melhor_odd,
-            "faixa_odd": faixa,
-            "detalhes_score": detalhes
-        })
-
-    # Ordena do maior para o menor score
-    jogos_ranqueados.sort(key=lambda x: x["score"], reverse=True)
-    return jogos_ranqueados
-
-
-def filtrar_por_confianca(jogos_ranqueados, confianca_minima=70):
-    """Filtra apenas jogos acima do threshold de confiança."""
-    return [j for j in jogos_ranqueados if j["score"] >= confianca_minima]
+def filtrar_por_confianca(jogos_ranqueados, confianca_minima=40):
+    return [j for j in jogos_ranqueados if j.get("score", 0) >= confianca_minima]
