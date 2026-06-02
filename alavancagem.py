@@ -527,5 +527,5 @@ def _tela_execucao(supabase):
         elif e["status"] is False:
             banca_atual = 0
             break
-    col4.metric("💰 Banca Atual", "f"R$ {round(banc)}
+    col4.metric("💰 Banca Atual", f"R$ {round(banc)}")
                                        
