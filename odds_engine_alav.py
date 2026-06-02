@@ -27,8 +27,8 @@ LIGAS_MEDIA = [
 
 LIGAS_BAIXA = [
     "Amistosos Selecoes",
-    "International Friendly",
-    "Friendly International"
+    "International Friendly Games",
+    "Friendly International Games"
 ]
 # Mercados bloqueados (muito arriscados)
 MERCADOS_BLOQUEADOS = [
