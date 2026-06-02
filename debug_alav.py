@@ -68,3 +68,4 @@ if st.button("TESTAR AGORA"):
     else:
         st.error("Sem odds mesmo sem filtro de bookmaker!")
         st.json(data2)
+        
