@@ -2,10 +2,10 @@ import streamlit as st
 import json
 from datetime import datetime
 
-from odds_engine import buscar_jogos_com_odds
-from stats_engine import init as stats_init, montar_contexto_stats
-from ranking_engine import ranquear_jogos, filtrar_por_confianca
-from historico_engine import salvar_entrada, exibir_painel_aprendizado
+from odds_engine_alav import buscar_jogos_com_odds
+from stats_engine_alav import init as stats_init, montar_contexto_stats
+from ranking_engine_alav import ranquear_jogos, filtrar_por_confianca
+from historico_engine_alav import salvar_entrada, exibir_painel_aprendizado
 
 
 def init_estado():
