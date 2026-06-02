@@ -181,3 +181,4 @@ FIM
             f"📊 PROJEÇÃO RESTANTE {jogo['fora']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\n"
             "FIM"
         )
+        
