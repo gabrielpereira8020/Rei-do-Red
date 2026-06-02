@@ -4,10 +4,32 @@ from datetime import datetime, timezone
 ODDS_API_BASE = "https://api.odds-api.io/v3"
 
 # Ligas por prioridade
-LIGAS_ALTA = ["UEFA Champions League", "Premier League", "La Liga", "Bundesliga",
-               "Serie A", "Brasileirao", "Libertadores"]
-LIGAS_MEDIA = ["Serie B", "Ligue 1", "Sudamericana", "Europa League"]
+LIGAS_ALTA = [
+    "UEFA Champions League",
+    "Premier League",
+    "La Liga",
+    "Bundesliga",
+    "Serie A",
+    "Brasileirao Serie A",
+    "Brasileirao",
+    "Libertadores",
+    "FIFA World Cup",
+    "World Cup"
+]
 
+LIGAS_MEDIA = [
+    "Europa League",
+    "Ligue 1",
+    "Sudamericana",
+    "Brasileirao Serie B",
+    "Serie B"
+]
+
+LIGAS_BAIXA = [
+    "Amistosos Selecoes",
+    "International Friendly",
+    "Friendly International"
+]
 # Mercados bloqueados (muito arriscados)
 MERCADOS_BLOQUEADOS = [
     "correct score", "placar correto", "exact score",
