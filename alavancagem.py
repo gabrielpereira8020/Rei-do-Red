@@ -198,15 +198,22 @@ def tela_alavancagem(supabase=None):
                     txt.text("Buscando odds: " + nome)
 
                 jogos, status = buscar_jogos_com_odds(odds_api_key, update_progress)
+
                 prog.empty()
                 txt.empty()
+
+                st.write("DEBUG STATUS:", status)
+                st.write("DEBUG JOGOS:", len(jogos))
+
+                if jogos:
+                    for jogo in jogos[:10]:
+                        st.write(jogo)
 
                 if status != "ok" and not jogos:
                     st.error("Erro: " + status)
                     return
 
                 st.info("Odds reais: " + str(len(jogos)) + " jogos encontrados")
-
                 # PASSO 2: Busca estatísticas para cada jogo
                 st.write("📊 Buscando estatísticas dos times...")
                 prog2 = st.progress(0)
