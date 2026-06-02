@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/stats_engine.py << 'EOF'
 import requests
 import streamlit as st
 
