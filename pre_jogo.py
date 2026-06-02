@@ -124,3 +124,4 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado):
                 st.error(
                     f"Erro ao gerar análise: {erro}"
                 )
+                
