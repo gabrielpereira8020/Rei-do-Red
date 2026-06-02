@@ -226,3 +226,71 @@ def buscar_jogos_com_odds(odds_api_key, progress_callback=None):
     # Ordena por prioridade (ligas melhores primeiro)
     jogos.sort(key=lambda x: x["prioridade"])
     return jogos, "ok"
+
+
+# ─────────────────────────────────────────────
+# NOVA FUNÇÃO — busca por nome do jogo (Etapa 4)
+# Usada pela nova arquitetura: busca odds só dos jogos aprovados pela IA
+# ─────────────────────────────────────────────
+
+def buscar_odds_evento_por_nome(home, away, odds_api_key):
+    """
+    Busca odds de um jogo específico pelo nome dos times.
+    Usa fuzzy match (contains) para lidar com variações de nome.
+    Retorna o texto de odds formatado ou "" se não encontrar.
+    """
+    try:
+        r = requests.get(
+            ODDS_API_BASE + "/events",
+            params={"apiKey": odds_api_key, "sport": "football", "limit": 200},
+            timeout=15
+        )
+        if r.status_code != 200:
+            return ""
+
+        data = r.json()
+        eventos = data if isinstance(data, list) else data.get("data", [])
+
+        home_lower = home.lower().strip()
+        away_lower = away.lower().strip()
+
+        # Procura evento que bata com os dois times
+        evento_match = None
+        melhor_score = 0
+
+        for ev in eventos:
+            ev_home = str(ev.get("home", ev.get("home_team", ""))).lower().strip()
+            ev_away = str(ev.get("away", ev.get("away_team", ""))).lower().strip()
+
+            # Tenta match direto ou parcial
+            score = 0
+            if home_lower in ev_home or ev_home in home_lower:
+                score += 1
+            if away_lower in ev_away or ev_away in away_lower:
+                score += 1
+            # Também tenta match por palavras
+            home_words = set(home_lower.split())
+            away_words = set(away_lower.split())
+            ev_home_words = set(ev_home.split())
+            ev_away_words = set(ev_away.split())
+            if home_words & ev_home_words:
+                score += 0.5
+            if away_words & ev_away_words:
+                score += 0.5
+
+            if score > melhor_score and jogo_e_futuro(ev.get("date", ev.get("start_time", ""))):
+                melhor_score = score
+                evento_match = ev
+
+        if not evento_match or melhor_score < 1.5:
+            return ""
+
+        event_id = evento_match.get("id", "")
+        if not event_id:
+            return ""
+
+        return buscar_odds_evento(event_id, odds_api_key)
+
+    except Exception:
+        return ""
+        
