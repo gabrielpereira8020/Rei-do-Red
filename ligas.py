@@ -43,18 +43,19 @@ LIGAS = {
         "J1 League": 98,
         "J2 League": 99
     },
-    "Competicoes Internacionais": {
-        "Copa do Mundo": 1,
-        "UEFA Champions League": 2,
-        "UEFA Europa League": 3,
-        "UEFA Conference League": 848,
-        "Libertadores": 13,
-        "Sudamericana": 11,
-        "Mundial de Clubes FIFA": 15,
-        "CONCACAF Champions Cup": 16,
-        "AFC Champions League Elite": 17,
-        "CAF Champions League": 12,
-        "Amistosos Selecoes": 9,
-        "Amistosos Clubes": 667
-    }
+    COMPETICOES_INTERNACIONAIS = {
+    "World Cup": 1,
+    "UEFA Champions League": 2,
+    "UEFA Europa League": 3,
+    "UEFA Europa Conference League": 848,
+    "CONMEBOL Libertadores": 13,
+    "CONMEBOL Sudamericana": 11,
+    "FIFA Club World Cup": 15,
+    "CONCACAF Champions Cup": 16,
+    "AFC Champions League Elite": 17,
+    "CAF Champions League": 12,
+    "International Friendlies": 9,
+    "Club Friendlies": 667
 }
+    }
+
