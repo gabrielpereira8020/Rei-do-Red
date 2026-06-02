@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/odds_engine.py << 'EOF'
 import requests
 from datetime import datetime, timezone
 
