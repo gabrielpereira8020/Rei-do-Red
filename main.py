@@ -215,4 +215,5 @@ with aba2:
     tela_pre_jogo(enviar_telegram, salvar_resultado)
 
 with aba3:
-    tela_alavancagem()
+    tela_alavancagem(supabase=supabase)
+    
