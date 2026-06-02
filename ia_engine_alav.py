@@ -173,5 +173,3 @@ def montar_contexto_stats(jogo):
             ctx += f"  {fora}: {class_away.get('posicao','?')}o lugar | {class_away.get('pontos','?')} pts | Saldo {class_away.get('saldo','?')}\n"
 
     return ctx
-EOF
-python3 -c "import ast; ast.parse(open('/mnt/user-data/outputs/stats_engine.py').read()); print('stats_engine OK')"
