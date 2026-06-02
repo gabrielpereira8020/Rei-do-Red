@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/alavancagem.py << 'EOF'
 import streamlit as st
 import json
 from datetime import datetime
