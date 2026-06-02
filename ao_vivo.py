@@ -164,3 +164,4 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                         "Pressão: " + str(pressao) + "\n\n" +
                         resposta[:800]
                     )
+                    
