@@ -13,12 +13,28 @@ NÃO depende de odds nessa etapa.
 import requests
 import streamlit as st
 from datetime import datetime, timedelta
+from ligas import LIGAS, COMPETICOES_INTERNACIONAIS
 
 API_KEY = None
 HEADERS = {}
 
-LIGAS_ALTA_IDS = {2, 3, 39, 61, 71, 78, 94, 135, 140, 848, 13, 11, 15}
-LIGAS_MEDIA_IDS = {40, 62, 72, 79, 95, 99, 128, 136, 141, 253}
+# Monta os sets de IDs direto do ligas.py — sem duplicar nada
+def _todos_ids():
+    ids = set()
+    for pais in LIGAS.values():
+        for lid in pais.values():
+            ids.add(lid)
+    for lid in COMPETICOES_INTERNACIONAIS.values():
+        ids.add(lid)
+    return ids
+
+# Ligas de alto valor para prioridade 1
+LIGAS_ALTA_IDS = {
+    39, 61, 71, 78, 94, 135, 140, 848,  # ligas nacionais top
+    2, 3, 13, 11, 15, 1, 16, 17, 12     # competicoes internacionais
+}
+# Tudo mais do ligas.py recebe prioridade 2
+LIGAS_MEDIA_IDS = _todos_ids() - LIGAS_ALTA_IDS
 
 
 def init(api_key):
@@ -57,9 +73,9 @@ def _get_dict(endpoint):
     return {}
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # BUSCAR JOGOS FUTUROS DA API FOOTBALL
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
     """
@@ -160,9 +176,9 @@ def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
     return jogos_encontrados
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # ENRIQUECER JOGO COM STATS REAIS
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def enriquecer_stats_jogo(jogo):
     """
@@ -178,7 +194,7 @@ def enriquecer_stats_jogo(jogo):
 
     ctx_lines = [f"Jogo: {casa} x {fora} | Liga: {jogo.get('liga_nome','')} | {jogo.get('data','')}"]
 
-    # ── Stats mandante ──────────────────────────
+    # -- Stats mandante --------------------------
     stats_h = _get_dict(f"teams/statistics?team={home_id}&league={liga_id}&season={temporada}")
     if not stats_h:
         stats_h = _get_dict(f"teams/statistics?team={home_id}&league={liga_id}&season={temporada-1}")
@@ -193,7 +209,7 @@ def enriquecer_stats_jogo(jogo):
             f"Seq: {jogo['sequencia_home']}"
         )
 
-    # ── Stats visitante ──────────────────────────
+    # -- Stats visitante --------------------------
     stats_a = _get_dict(f"teams/statistics?team={away_id}&league={liga_id}&season={temporada}")
     if not stats_a:
         stats_a = _get_dict(f"teams/statistics?team={away_id}&league={liga_id}&season={temporada-1}")
@@ -208,7 +224,7 @@ def enriquecer_stats_jogo(jogo):
             f"Seq: {jogo['sequencia_away']}"
         )
 
-    # ── H2H ──────────────────────────────────────
+    # -- H2H --------------------------------------
     h2h = _get(f"fixtures/headtohead?h2h={home_id}-{away_id}&last=5")
     if h2h:
         home_wins = sum(
@@ -229,7 +245,7 @@ def enriquecer_stats_jogo(jogo):
         ctx_lines.append(f"H2H (últimos {len(h2h)}): {home_wins} vitórias do mandante")
         ctx_lines.extend(h2h_lines)
 
-    # ── Classificação ────────────────────────────
+    # -- Classificação ----------------------------
     standings = _get(f"standings?league={liga_id}&season={temporada}")
     if standings:
         try:
@@ -313,11 +329,11 @@ def _preencher_stats_time(jogo, stats, lado):
         pass
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # CONTEXTO ANTIGO (compatibilidade com pre_jogo / ao_vivo)
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def montar_contexto_stats(jogo):
     """Compat: chamado pela alavancagem antiga. Usa enriquecer_stats_jogo."""
     return enriquecer_stats_jogo(jogo)
-        
+      
