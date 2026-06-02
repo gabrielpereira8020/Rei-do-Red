@@ -81,3 +81,4 @@ texto
     resposta = perguntar_ia(prompt)
 
     return extrair_resposta(resposta)
+    
