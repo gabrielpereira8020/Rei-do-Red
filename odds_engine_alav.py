@@ -76,8 +76,7 @@ def buscar_eventos_futuros(odds_api_key):
     try:
         r = requests.get(
             ODDS_API_BASE + "/events",
-            params={"apiKey": odds_api_key, "sport": "football",
-                    "status": "upcoming", "limit": 100},
+            params={"apiKey": odds_api_key, "sport": "football", "limit": 100},
             timeout=15
         )
         if r.status_code == 401:
@@ -85,7 +84,12 @@ def buscar_eventos_futuros(odds_api_key):
         if r.status_code != 200:
             return None, "erro_" + str(r.status_code)
         data = r.json()
+
+        print("STATUS CODE:", r.status_code)
+        print("RESPOSTA API:", data)
+
         eventos = data if isinstance(data, list) else data.get("data", [])
+        print("EVENTOS ENCONTRADOS:", len(eventos))
         futuros = [ev for ev in eventos if jogo_e_futuro(
             ev.get("date", ev.get("start_time", ""))
         )]
