@@ -132,3 +132,4 @@ def exibir_painel_aprendizado(supabase):
         colunas_existentes = [c for c in colunas if c in df.columns]
         df = df[colunas_existentes].sort_values("data", ascending=False).head(20)
         st.dataframe(df, use_container_width=True)
+        
