@@ -525,5 +525,5 @@ def _tela_execucao(supabase):
     atual = st.session_state.alav_entrada_atual
     jogos = st.session_state.alav_jogos
 
-    greens = sum(1 for e in entradas if e["status"] is True)
-    reds = sum(1 for e in entradas if e["status"] is False)
+    greens   = sum(1 for e in entradas if e["status"] is True)
+    reds     = sum(1 for e i
