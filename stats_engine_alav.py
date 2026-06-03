@@ -133,9 +133,9 @@ def _montar_jogo(f, ligas_ids_set):
 
 def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
     """
-    Busca TODOS os jogos do dia de uma vez via endpoint /fixtures?date=YYYY-MM-DD
-    Uma chamada por dia em vez de 64 chamadas (32 ligas x 2 dias).
-    Muito mais rapido e economico na API.
+    Busca jogos futuros com estrategia dupla:
+    1) Tenta endpoint por data (uma chamada, retorna tudo)
+    2) Se retornar vazio (plano free), busca liga por liga com season dinamica
     """
     todas_ids = LIGAS_ALTA_IDS | LIGAS_MEDIA_IDS
     jogos_encontrados = []
@@ -144,58 +144,87 @@ def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
     datas = [datetime.now().strftime("%Y-%m-%d")]
     if dias >= 2:
         datas.append((datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"))
-    if dias >= 3:
-        datas.append((datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d"))
 
+    # --- ESTRATEGIA 1: endpoint por data (PRO plan) ---
+    # Tenta variações do endpoint até achar o que funciona
+    total_estrategia1 = 0
     for data_str in datas:
-        try:
-            # Uma unica chamada busca TODOS os jogos do dia
-            fixtures = _get(f"fixtures?date={data_str}&timezone=America/Sao_Paulo")
+        fixtures = []
+        # Variacao 1: sem timezone
+        fixtures = _get(f"fixtures?date={data_str}")
+        # Variacao 2: com status NS
+        if not fixtures:
+            fixtures = _get(f"fixtures?date={data_str}&status=NS")
+        # Variacao 3: com timezone UTC
+        if not fixtures:
+            fixtures = _get(f"fixtures?date={data_str}&timezone=UTC")
 
-            if not fixtures:
-                import streamlit as st
-                st.warning(f"API Football retornou 0 fixtures para {data_str}. Verifique sua API Key.")
+        st.caption(f"🔍 {data_str}: API retornou {len(fixtures)} fixtures brutos")
+
+        for f in fixtures:
+            fid = f.get("fixture", {}).get("id")
+            if not fid or fid in ids_vistos:
                 continue
+            status = f.get("fixture", {}).get("status", {}).get("short", "")
+            if status not in ("NS", "TBD", ""):
+                continue
+            jogo = _montar_jogo(f, todas_ids)
+            if jogo:
+                ids_vistos.add(fid)
+                jogos_encontrados.append(jogo)
+                total_estrategia1 += 1
+            
+    if total_estrategia1 > 0:
+        st.info(f"✅ Endpoint por data: {total_estrategia1} jogos aceitos")
+        jogos_encontrados.sort(key=lambda x: x.get("prioridade", 3))
+        return jogos_encontrados
+    
+    st.warning("⚠️ Endpoint por data retornou 0 jogos aceitos — iniciando busca por liga...")
 
-            total_bruto = len(fixtures)
-            descartados_status = 0
-            descartados_liga = 0
-            aceitos = 0
+    # --- ESTRATEGIA 2: busca por liga (plano free) ---
+    st.info("📡 Usando busca por liga (compatível com plano free da API Football)...")
 
-            for f in fixtures:
-                fid = f.get("fixture", {}).get("id")
-                if not fid or fid in ids_vistos:
+    ano = datetime.now().year
+    # Tenta temporada atual e anterior para cobrir ligas com calendário diferente
+    temporadas = [ano, ano - 1]
+
+    # Prioriza ligas de alta prioridade primeiro para economizar cota
+    ligas_ordenadas = (
+        list(LIGAS_ALTA_IDS) +
+        [l for l in LIGAS_MEDIA_IDS if l not in LIGAS_ALTA_IDS]
+    )
+
+    prog = st.progress(0)
+    total_ligas = len(ligas_ordenadas)
+
+    for idx, liga_id in enumerate(ligas_ordenadas):
+        prog.progress((idx + 1) / total_ligas)
+        for temporada in temporadas:
+            for data_str in datas:
+                try:
+                    fixtures = _get(
+                        f"fixtures?league={liga_id}&season={temporada}&date={data_str}"
+                    )
+                    for f in fixtures:
+                        fid = f.get("fixture", {}).get("id")
+                        if not fid or fid in ids_vistos:
+                            continue
+                        status = f.get("fixture", {}).get("status", {}).get("short", "")
+                        if status not in ("NS", "TBD", ""):
+                            continue
+                        jogo = _montar_jogo(f, todas_ids)
+                        if jogo:
+                            ids_vistos.add(fid)
+                            jogos_encontrados.append(jogo)
+                    if fixtures:
+                        # Se achou jogos nessa temporada, nao precisa tentar a anterior
+                        break
+                except Exception:
                     continue
 
-                # Filtra status — so jogos nao iniciados
-                status = f.get("fixture", {}).get("status", {}).get("short", "")
-                if status not in ("NS", "TBD", ""):
-                    descartados_status += 1
-                    continue
-
-                jogo = _montar_jogo(f, todas_ids)
-                if jogo:
-                    ids_vistos.add(fid)
-                    jogos_encontrados.append(jogo)
-                    aceitos += 1
-                else:
-                    descartados_liga += 1
-
-            import streamlit as st
-            st.info(
-                f"📅 {data_str}: {total_bruto} jogos na API | "
-                f"{descartados_status} já iniciados/encerrados | "
-                f"{descartados_liga} fora das ligas monitoradas | "
-                f"✅ {aceitos} aceitos"
-            )
-
-        except Exception as e:
-            import streamlit as st
-            st.error(f"Erro ao buscar {data_str}: {e}")
-            continue
-
-    # Ordena: ligas de alta prioridade primeiro
+    prog.empty()
     jogos_encontrados.sort(key=lambda x: x.get("prioridade", 3))
+    st.info(f"✅ Busca por liga: {len(jogos_encontrados)} jogos encontrados")
     return jogos_encontrados
 
 
@@ -359,4 +388,4 @@ def _preencher_stats_time(jogo, stats, lado):
 def montar_contexto_stats(jogo):
     """Compat: chamado pela alavancagem antiga. Usa enriquecer_stats_jogo."""
     return enriquecer_stats_jogo(jogo)
-      
+                          
