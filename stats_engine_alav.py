@@ -151,6 +151,17 @@ def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
         try:
             # Uma unica chamada busca TODOS os jogos do dia
             fixtures = _get(f"fixtures?date={data_str}&timezone=America/Sao_Paulo")
+
+            if not fixtures:
+                import streamlit as st
+                st.warning(f"API Football retornou 0 fixtures para {data_str}. Verifique sua API Key.")
+                continue
+
+            total_bruto = len(fixtures)
+            descartados_status = 0
+            descartados_liga = 0
+            aceitos = 0
+
             for f in fixtures:
                 fid = f.get("fixture", {}).get("id")
                 if not fid or fid in ids_vistos:
@@ -159,13 +170,28 @@ def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
                 # Filtra status — so jogos nao iniciados
                 status = f.get("fixture", {}).get("status", {}).get("short", "")
                 if status not in ("NS", "TBD", ""):
+                    descartados_status += 1
                     continue
 
                 jogo = _montar_jogo(f, todas_ids)
                 if jogo:
                     ids_vistos.add(fid)
                     jogos_encontrados.append(jogo)
-        except Exception:
+                    aceitos += 1
+                else:
+                    descartados_liga += 1
+
+            import streamlit as st
+            st.info(
+                f"📅 {data_str}: {total_bruto} jogos na API | "
+                f"{descartados_status} já iniciados/encerrados | "
+                f"{descartados_liga} fora das ligas monitoradas | "
+                f"✅ {aceitos} aceitos"
+            )
+
+        except Exception as e:
+            import streamlit as st
+            st.error(f"Erro ao buscar {data_str}: {e}")
             continue
 
     # Ordena: ligas de alta prioridade primeiro
@@ -333,3 +359,4 @@ def _preencher_stats_time(jogo, stats, lado):
 def montar_contexto_stats(jogo):
     """Compat: chamado pela alavancagem antiga. Usa enriquecer_stats_jogo."""
     return enriquecer_stats_jogo(jogo)
+      
