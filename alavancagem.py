@@ -477,10 +477,24 @@ A odd real é validada contra a faixa configurada.
             odd_min, odd_max, confianca_min
         )
 
+        # Mostra log inline logo abaixo do botão
+        logs = st.session_state.get("alav_log_etapas", [])
+        if logs:
+            with st.expander("🔍 Log do pipeline — clique para ver", expanded=True):
+                for linha in logs:
+                    if "✅" in linha:
+                        st.success(linha)
+                    elif "❌" in linha:
+                        st.error(linha)
+                    elif "⚠️" in linha:
+                        st.warning(linha)
+                    else:
+                        st.caption(linha)
+
         if not jogos_prontos:
             st.error(
-                "❌ Nenhum jogo passou por todas as etapas do pipeline.\n\n"
-                "Verifique a aba **Log de Etapas** para entender onde os jogos foram bloqueados."
+                "❌ Nenhum jogo passou por todas as etapas do pipeline. "
+                "Veja o log acima para entender onde os jogos foram bloqueados."
             )
             return
 
@@ -512,20 +526,4 @@ def _tela_execucao(supabase):
     jogos = st.session_state.alav_jogos
 
     greens   = sum(1 for e in entradas if e["status"] is True)
-    reds     = sum(1 for e in entradas if e["status"] is False)
-    pendentes = sum(1 for e in entradas if e["status"] is None)
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("✅ Greens", greens)
-    col2.metric("❌ Reds", reds)
-    col3.metric("⏳ Pendentes", pendentes)
-
-    banca_atual = st.session_state.alav_banca_inicial
-    for e in entradas:
-        if e["status"] is True:
-            banca_atual = e["retorno"]
-        elif e["status"] is False:
-            banca_atual = 0
-            break
-    col4.metric("💰 Banca Atual", f"R$ {round(banc)}")
-                                       
+    reds     = sum(1 for e i
