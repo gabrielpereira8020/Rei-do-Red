@@ -161,6 +161,27 @@ def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
 
         st.caption(f"🔍 {data_str}: API retornou {len(fixtures)} fixtures brutos")
 
+        # DEBUG: coleta ligas encontradas e status para diagnostico
+        ligas_encontradas = {}
+        status_encontrados = {}
+        for f in fixtures:
+            liga = f.get("league", {})
+            lid = liga.get("id", 0)
+            lnome = liga.get("name", "?")
+            status = f.get("fixture", {}).get("status", {}).get("short", "?")
+            ligas_encontradas[lid] = lnome
+            status_encontrados[status] = status_encontrados.get(status, 0) + 1
+
+        # Mostra top 20 ligas encontradas e se estao na lista
+        linhas_debug = []
+        for lid, lnome in sorted(ligas_encontradas.items()):
+            na_lista = "✅" if lid in todas_ids else "❌"
+            linhas_debug.append(f"{na_lista} ID {lid}: {lnome}")
+        
+        st.info(f"**Status dos fixtures ({data_str}):** {status_encontrados}")
+        with st.expander(f"📋 Ligas encontradas em {data_str} ({len(ligas_encontradas)} ligas)"):
+            st.text("\n".join(linhas_debug[:40]))
+
         for f in fixtures:
             fid = f.get("fixture", {}).get("id")
             if not fid or fid in ids_vistos:
@@ -388,4 +409,4 @@ def _preencher_stats_time(jogo, stats, lado):
 def montar_contexto_stats(jogo):
     """Compat: chamado pela alavancagem antiga. Usa enriquecer_stats_jogo."""
     return enriquecer_stats_jogo(jogo)
-                          
+                      
