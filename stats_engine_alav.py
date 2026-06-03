@@ -77,102 +77,99 @@ def _get_dict(endpoint):
 # BUSCAR JOGOS FUTUROS DA API FOOTBALL
 # ---------------------------------------------
 
+def _montar_jogo(f, ligas_ids_set):
+    """Converte um fixture da API Football em dict padronizado."""
+    fid = f.get("fixture", {}).get("id")
+    if not fid:
+        return None
+    home = f.get("teams", {}).get("home", {})
+    away = f.get("teams", {}).get("away", {})
+    league = f.get("league", {})
+    liga_id = league.get("id", 0)
+
+    home_name = home.get("name", "")
+    away_name = away.get("name", "")
+    home_id = home.get("id")
+    away_id = away.get("id")
+
+    if not home_name or not away_name or not home_id or not away_id:
+        return None
+
+    # So inclui ligas monitoradas
+    todas_ids = LIGAS_ALTA_IDS | LIGAS_MEDIA_IDS
+    if ligas_ids_set and liga_id not in todas_ids:
+        return None
+
+    if liga_id in LIGAS_ALTA_IDS:
+        prioridade = 1
+    elif liga_id in LIGAS_MEDIA_IDS:
+        prioridade = 2
+    else:
+        prioridade = 3
+
+    return {
+        "id": str(fid),
+        "nome": f"{home_name} x {away_name}",
+        "casa": home_name,
+        "fora": away_name,
+        "casa_id": home_id,
+        "fora_id": away_id,
+        "liga_nome": league.get("name", ""),
+        "liga_id": liga_id,
+        "data": f.get("fixture", {}).get("date", "")[:16].replace("T", " "),
+        "prioridade": prioridade,
+        "forma_home": "", "forma_away": "",
+        "aprov_home": 0, "aprov_away": 0,
+        "gols_marcados_home": 0, "gols_sofridos_home": 0,
+        "gols_marcados_away": 0, "gols_sofridos_away": 0,
+        "sequencia_home": "", "sequencia_away": "",
+        "h2h_home_wins": 0, "h2h_total": 0,
+        "classificacao_home": {}, "classificacao_away": {},
+        "stats_txt": "", "odds_txt": "",
+        "tem_odds": False, "melhor_odd": 0, "faixa_odd": "",
+        "ia_mercado": "", "ia_confianca": 0, "ia_motivo": "",
+    }
+
+
 def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
     """
-    Busca jogos de hoje e amanhã para as ligas monitoradas.
-    Retorna lista de jogos formatados com IDs dos times para buscar stats.
+    Busca TODOS os jogos do dia de uma vez via endpoint /fixtures?date=YYYY-MM-DD
+    Uma chamada por dia em vez de 64 chamadas (32 ligas x 2 dias).
+    Muito mais rapido e economico na API.
     """
-    if ligas_ids is None:
-        ligas_ids = list(LIGAS_ALTA_IDS | LIGAS_MEDIA_IDS)
-
+    todas_ids = LIGAS_ALTA_IDS | LIGAS_MEDIA_IDS
     jogos_encontrados = []
     ids_vistos = set()
 
-    datas = [
-        datetime.now().strftime("%Y-%m-%d"),
-        (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-    ]
+    datas = [datetime.now().strftime("%Y-%m-%d")]
+    if dias >= 2:
+        datas.append((datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"))
+    if dias >= 3:
+        datas.append((datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d"))
 
-    temporada = datetime.now().year
+    for data_str in datas:
+        try:
+            # Uma unica chamada busca TODOS os jogos do dia
+            fixtures = _get(f"fixtures?date={data_str}&timezone=America/Sao_Paulo")
+            for f in fixtures:
+                fid = f.get("fixture", {}).get("id")
+                if not fid or fid in ids_vistos:
+                    continue
 
-    for liga_id in ligas_ids:
-        for data_str in datas[:dias]:
-            try:
-                fixtures = _get(
-                    f"fixtures?league={liga_id}&season={temporada}&date={data_str}"
-                )
-                # Tenta também ano anterior se não achar nada
-                if not fixtures:
-                    fixtures = _get(
-                        f"fixtures?league={liga_id}&season={temporada - 1}&date={data_str}"
-                    )
+                # Filtra status — so jogos nao iniciados
+                status = f.get("fixture", {}).get("status", {}).get("short", "")
+                if status not in ("NS", "TBD", ""):
+                    continue
 
-                for f in fixtures:
-                    fid = f.get("fixture", {}).get("id")
-                    if not fid or fid in ids_vistos:
-                        continue
+                jogo = _montar_jogo(f, todas_ids)
+                if jogo:
                     ids_vistos.add(fid)
+                    jogos_encontrados.append(jogo)
+        except Exception:
+            continue
 
-                    home = f.get("teams", {}).get("home", {})
-                    away = f.get("teams", {}).get("away", {})
-                    league = f.get("league", {})
-
-                    home_name = home.get("name", "")
-                    away_name = away.get("name", "")
-                    home_id = home.get("id")
-                    away_id = away.get("id")
-
-                    if not home_name or not away_name or not home_id or not away_id:
-                        continue
-
-                    # Prioridade da liga
-                    if liga_id in LIGAS_ALTA_IDS:
-                        prioridade = 1
-                    elif liga_id in LIGAS_MEDIA_IDS:
-                        prioridade = 2
-                    else:
-                        prioridade = 3
-
-                    jogos_encontrados.append({
-                        "id": str(fid),
-                        "nome": f"{home_name} x {away_name}",
-                        "casa": home_name,
-                        "fora": away_name,
-                        "casa_id": home_id,
-                        "fora_id": away_id,
-                        "liga_nome": league.get("name", ""),
-                        "liga_id": liga_id,
-                        "data": f.get("fixture", {}).get("date", "")[:16].replace("T", " "),
-                        "prioridade": prioridade,
-                        # Campos de stats (preenchidos depois)
-                        "forma_home": "",
-                        "forma_away": "",
-                        "aprov_home": 0,
-                        "aprov_away": 0,
-                        "gols_marcados_home": 0,
-                        "gols_sofridos_home": 0,
-                        "gols_marcados_away": 0,
-                        "gols_sofridos_away": 0,
-                        "sequencia_home": "",
-                        "sequencia_away": "",
-                        "h2h_home_wins": 0,
-                        "h2h_total": 0,
-                        "classificacao_home": {},
-                        "classificacao_away": {},
-                        "stats_txt": "",
-                        # Campos de odds (preenchidos na Etapa 3)
-                        "odds_txt": "",
-                        "tem_odds": False,
-                        "melhor_odd": 0,
-                        "faixa_odd": "",
-                        # Campos da IA (preenchidos na Etapa 2)
-                        "ia_mercado": "",
-                        "ia_confianca": 0,
-                        "ia_motivo": "",
-                    })
-            except Exception:
-                continue
-
+    # Ordena: ligas de alta prioridade primeiro
+    jogos_encontrados.sort(key=lambda x: x.get("prioridade", 3))
     return jogos_encontrados
 
 
@@ -336,4 +333,3 @@ def _preencher_stats_time(jogo, stats, lado):
 def montar_contexto_stats(jogo):
     """Compat: chamado pela alavancagem antiga. Usa enriquecer_stats_jogo."""
     return enriquecer_stats_jogo(jogo)
-      
