@@ -31,7 +31,9 @@ def _todos_ids():
 # Ligas de alto valor para prioridade 1
 LIGAS_ALTA_IDS = {
     39, 61, 71, 78, 94, 135, 140, 848,  # ligas nacionais top
-    2, 3, 13, 11, 15, 1, 16, 17, 12     # competicoes internacionais
+    2, 3, 13, 11, 15, 1, 16, 17, 12, 9,     # competicoes internacionais
+    88, 144, 203, 179, 262, 103, 113, 119 
+    207
 }
 # Tudo mais do ligas.py recebe prioridade 2
 LIGAS_MEDIA_IDS = _todos_ids() - LIGAS_ALTA_IDS
