@@ -518,5 +518,13 @@ def _tela_execucao(supabase):
     col3.metric("⏳ Pendentes", pendentes)
 
     banca_atual = st.session_state.alav_banca_inicial
+
     for e in entradas:
-        if e["status"] is True:
+    if e["status"] is True:
+        banca_atual = e["retorno"]
+
+    elif e["status"] is False:
+        banca_atual = 0
+        break
+
+    col4.metric("💰 Banca Atual", f"R$ {round(banca_atual, 2)}")
