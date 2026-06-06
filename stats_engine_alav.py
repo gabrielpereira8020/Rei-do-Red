@@ -95,11 +95,6 @@ def _montar_jogo(f, ligas_ids_set):
     if not home_name or not away_name or not home_id or not away_id:
         return None
 
-    # So inclui ligas monitoradas
-    todas_ids = LIGAS_ALTA_IDS | LIGAS_MEDIA_IDS
-    if ligas_ids_set and liga_id not in todas_ids:
-        return None
-
     if liga_id in LIGAS_ALTA_IDS:
         prioridade = 1
     elif liga_id in LIGAS_MEDIA_IDS:
@@ -187,7 +182,8 @@ def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
             if not fid or fid in ids_vistos:
                 continue
             status = f.get("fixture", {}).get("status", {}).get("short", "")
-            if status not in ("NS", "TBD", ""):
+            # Descarta apenas jogos ja encerrados ou cancelados
+            if status in ("FT", "AET", "PEN", "AWD", "WO", "CANC", "ABD", "INT"):
                 continue
             jogo = _montar_jogo(f, todas_ids)
             if jogo:
@@ -231,7 +227,8 @@ def buscar_jogos_futuros_api_football(ligas_ids=None, dias=2):
                         if not fid or fid in ids_vistos:
                             continue
                         status = f.get("fixture", {}).get("status", {}).get("short", "")
-                        if status not in ("NS", "TBD", ""):
+                        # Descarta apenas jogos ja encerrados ou cancelados
+                        if status in ("FT", "AET", "PEN", "AWD", "WO", "CANC", "ABD", "INT"):
                             continue
                         jogo = _montar_jogo(f, todas_ids)
                         if jogo:
@@ -409,4 +406,4 @@ def _preencher_stats_time(jogo, stats, lado):
 def montar_contexto_stats(jogo):
     """Compat: chamado pela alavancagem antiga. Usa enriquecer_stats_jogo."""
     return enriquecer_stats_jogo(jogo)
-                      
+  
