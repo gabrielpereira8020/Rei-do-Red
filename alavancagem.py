@@ -519,4 +519,4 @@ def _tela_execucao(supabase):
 
     banca_atual = st.session_state.alav_banca_inicial
     for e in entradas:
-        if e["status"] i
+        if e["status"] is True:
