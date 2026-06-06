@@ -271,7 +271,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
             jogo["ia_confianca"] = conf_ia
             jogo["ia_motivo"] = resultado_ia.get("motivo", "")
             jogos_aprovados_ia.append(jogo)
-            log_etapa("  ✅ "+ + jogo["nome"] + " -> " + str(jogo["ia_mercado"]) + " (" + str(conf_ia) + "/100)")
+            log_etapa("  ✅ " + jogo["nome"] + " -> " + str(jogo["ia_mercado"]) + " (" + str(conf_ia) + "/100)")
         else:
             motivo = resultado_ia.get("motivo", "confianca insuficiente")
             log_etapa("  RECUSADO: " + jogo["nome"] + " (" + str(conf_ia) + "/100) - " + str(motivo))
