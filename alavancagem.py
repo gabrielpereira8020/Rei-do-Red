@@ -519,15 +519,15 @@ def _tela_execucao(supabase):
 
     banca_atual = st.session_state.alav_banca_inicial
 
-for e in entradas:
-    if e["status"] is True:
-        banca_atual = e["retorno"]
+    for e in entradas:
+        if e["status"] is True:
+            banca_atual = e["retorno"]
 
-    elif e["status"] is False:
-        banca_atual = 0
-        break
+        elif e["status"] is False:
+            banca_atual = 0
+            break
 
-col4.metric(
-    "💰 Banca Atual",
-    f"R$ {round(banca_atual, 2)}"
+    col4.metric(
+        "💰 Banca Atual",
+        f"R$ {round(banca_atual, 2)}"
 )
