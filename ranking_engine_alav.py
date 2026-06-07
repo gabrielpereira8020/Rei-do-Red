@@ -183,4 +183,4 @@ def validar_odd_para_entrada(odd_real, odd_min, odd_max, confianca_ia):
         return True, f"Odd {odd_real} dentro da faixa ({odd_min}-{odd_max})"
 
     return False, f"Odd {odd_real} fora da faixa"
-      
+  
