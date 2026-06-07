@@ -227,19 +227,27 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         etapa1.error("Nenhum jogo encontrado na API Football para hoje/amanhã.")
         return []
 
-    # Limita a 40 jogos para enriquecer (ja ordenados por prioridade)
-    # Evita centenas de chamadas de API desnecessarias
-    jogos_para_enriquecer = jogos_raw[:40]
-    log_etapa(f"Etapa 1: enriquecendo stats de {len(jogos_para_enriquecer)} jogos (top por prioridade)")
+    # Enriquece os top 50 jogos por prioridade (ligas top primeiro)
+    jogos_para_enriquecer = jogos_raw[:50]
+    log_etapa(f"Etapa 1: enriquecendo stats de {len(jogos_para_enriquecer)} jogos prioritarios")
 
     prog1 = st.progress(0)
+    stats_ok = 0
     for i, jogo in enumerate(jogos_para_enriquecer):
         prog1.progress((i + 1) / max(len(jogos_para_enriquecer), 1))
         enriquecer_stats_jogo(jogo)
+        if jogo.get("forma_home") or jogo.get("aprov_home", 0) > 0:
+            stats_ok += 1
     prog1.empty()
 
-    # Substitui lista original pelos enriquecidos + restantes sem stats
-    jogos_raw = jogos_para_enriquecer + jogos_raw[40:]
+    jogos_raw = jogos_para_enriquecer + jogos_raw[50:]
+    log_etapa(f"Etapa 1: {stats_ok}/{len(jogos_para_enriquecer)} com stats reais | {len(jogos_para_enriquecer)-stats_ok} sem stats")
+
+    # DEBUG: mostra aproveitamento dos primeiros jogos para confirmar stats
+    com_stats = [j for j in jogos_para_enriquecer if j.get("aprov_home", 0) > 0]
+    sem_stats = [j for j in jogos_para_enriquecer if j.get("aprov_home", 0) == 0]
+    if sem_stats:
+        log_etapa(f"ATENCAO: {len(sem_stats)} jogos sem stats — podem ser ligas sem dados na API")
 
     # ──────────────────────────────────────────
     # ETAPA 2 — Ranking por estatísticas
@@ -423,9 +431,14 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
     with col5:
         odd_max = st.slider("Odd máxima", 1.50, 2.50, float(st.session_state.alav_odd_max), 0.05)
     with col6:
-        confianca_min = st.slider("Confiança mínima da IA (0-100)", 50, 95,
+        confianca_min = st.slider("Confiança mínima da IA (0-100)", 30, 95,
                                   int(st.session_state.alav_confianca_min), 5)
-        st.caption("Abaixo disso, a IA descarta o jogo")
+        if confianca_min <= 40:
+            st.caption("⚠️ Confiança baixa — mais jogos mas menos seletivo")
+        elif confianca_min >= 80:
+            st.caption("🎯 Alta seletividade — poucos jogos mas mais seguros")
+        else:
+            st.caption("Abaixo disso, a IA descarta o jogo")
 
     # Preview
     st.markdown("### 👁️ Preview")
@@ -684,3 +697,4 @@ def _tela_execucao(supabase):
 def _resetar_alavancagem():
     for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
         st.session_state.pop(k, None)
+ 
