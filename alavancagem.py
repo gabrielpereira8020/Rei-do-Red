@@ -27,6 +27,12 @@ import json
 from datetime import datetime
 
 from odds_engine_alav import buscar_odds_evento_por_nome, buscar_odds_evento
+from the_odds_api import (
+    buscar_odds_jogo as the_odds_buscar,
+    extrair_melhor_odd_mercado,
+    montar_texto_odds,
+    verificar_cota_restante,
+)
 from stats_engine_alav import init as stats_init, buscar_jogos_futuros_api_football, enriquecer_stats_jogo
 from ranking_engine_alav import ranquear_jogos_por_stats, filtrar_top_para_ia, validar_odd_para_entrada
 from historico_engine_alav import salvar_entrada, exibir_painel_aprendizado
