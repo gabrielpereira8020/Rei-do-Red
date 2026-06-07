@@ -30,12 +30,9 @@ def _todos_ids():
 
 # Ligas de alto valor para prioridade 1
 LIGAS_ALTA_IDS = {
-    39, 61, 71, 78, 94, 135, 140, 848,
-    2, 3, 13, 11, 15, 1, 16, 17, 12,
-    9,
-    88, 144, 203, 179, 262, 103, 113, 119
+    39, 61, 71, 78, 94, 135, 140, 848,  # ligas nacionais top
+    2, 3, 13, 11, 15, 1, 16, 17, 12     # competicoes internacionais
 }
-
 # Tudo mais do ligas.py recebe prioridade 2
 LIGAS_MEDIA_IDS = _todos_ids() - LIGAS_ALTA_IDS
 
@@ -81,7 +78,10 @@ def _get_dict(endpoint):
 # ---------------------------------------------
 
 def _montar_jogo(f, ligas_ids_set):
-    """Converte um fixture da API Football em dict padronizado."""
+    """Converte um fixture da API Football em dict padronizado.
+    Aceita QUALQUER liga — a IA decide o que vale apostar.
+    Ligas conhecidas recebem prioridade maior no ranking.
+    """
     fid = f.get("fixture", {}).get("id")
     if not fid:
         return None
@@ -98,12 +98,13 @@ def _montar_jogo(f, ligas_ids_set):
     if not home_name or not away_name or not home_id or not away_id:
         return None
 
+    # Prioridade: quanto maior, mais cedo aparece no ranking
     if liga_id in LIGAS_ALTA_IDS:
         prioridade = 1
     elif liga_id in LIGAS_MEDIA_IDS:
         prioridade = 2
     else:
-        prioridade = 3
+        prioridade = 3  # Liga desconhecida — aceita mas fica por ultimo
 
     return {
         "id": str(fid),
@@ -409,4 +410,4 @@ def _preencher_stats_time(jogo, stats, lado):
 def montar_contexto_stats(jogo):
     """Compat: chamado pela alavancagem antiga. Usa enriquecer_stats_jogo."""
     return enriquecer_stats_jogo(jogo)
-  
+      
