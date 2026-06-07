@@ -207,7 +207,7 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
 # PIPELINE COMPLETO DAS 4 ETAPAS
 # ─────────────────────────────────────────────
 
-def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=30):
+def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=20):
     """
     Executa as 4 etapas e retorna jogos prontos para o bilhete.
     """
@@ -227,11 +227,19 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         etapa1.error("Nenhum jogo encontrado na API Football para hoje/amanhã.")
         return []
 
+    # Limita a 40 jogos para enriquecer (ja ordenados por prioridade)
+    # Evita centenas de chamadas de API desnecessarias
+    jogos_para_enriquecer = jogos_raw[:40]
+    log_etapa(f"Etapa 1: enriquecendo stats de {len(jogos_para_enriquecer)} jogos (top por prioridade)")
+
     prog1 = st.progress(0)
-    for i, jogo in enumerate(jogos_raw):
-        prog1.progress((i + 1) / max(len(jogos_raw), 1))
+    for i, jogo in enumerate(jogos_para_enriquecer):
+        prog1.progress((i + 1) / max(len(jogos_para_enriquecer), 1))
         enriquecer_stats_jogo(jogo)
     prog1.empty()
+
+    # Substitui lista original pelos enriquecidos + restantes sem stats
+    jogos_raw = jogos_para_enriquecer + jogos_raw[40:]
 
     # ──────────────────────────────────────────
     # ETAPA 2 — Ranking por estatísticas
@@ -518,16 +526,161 @@ def _tela_execucao(supabase):
     col3.metric("⏳ Pendentes", pendentes)
 
     banca_atual = st.session_state.alav_banca_inicial
-
     for e in entradas:
         if e["status"] is True:
             banca_atual = e["retorno"]
-
         elif e["status"] is False:
             banca_atual = 0
             break
+    col4.metric("💰 Banca Atual", f"R$ {round(banca_atual, 2)}")
 
-    col4.metric(
-        "💰 Banca Atual",
-        f"R$ {round(banca_atual, 2)}"
-)
+    st.markdown("---")
+
+    # Entrada atual pendente
+    if atual < len(entradas) and entradas[atual]["status"] is None:
+        entrada_info = entradas[atual]
+
+        if not entrada_info.get("bilhete"):
+            st.info(f"🤖 Montando bilhete para entrada #{atual + 1} com {len(jogos)} jogos disponíveis...")
+            with st.spinner("IA analisando e escolhendo a melhor aposta..."):
+                historico = [e for e in entradas if e["status"] is not None]
+                try:
+                    resultado = ia_montar_bilhete_final(
+                        jogos,
+                        st.session_state.alav_odd_min,
+                        st.session_state.alav_odd_max,
+                        atual + 1,
+                        entrada_info["valor"],
+                        historico
+                    )
+                except Exception as err:
+                    st.error(f"Erro ao montar bilhete: {err}")
+                    if st.button("Tentar novamente", use_container_width=True):
+                        st.rerun()
+                    return
+
+            # Mostra resultado bruto para debug
+            with st.expander("🔬 Resposta bruta da IA", expanded=False):
+                st.json(resultado)
+
+            if resultado.get("sem_entrada"):
+                st.warning("**IA não encontrou entrada segura neste momento**")
+                motivo = resultado.get("motivo_recusa") or resultado.get("motivo", "sem motivo")
+                st.info(f"Motivo: {motivo}")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Tentar novamente", use_container_width=True):
+                        st.rerun()
+                with c2:
+                    if st.button("Nova Alavancagem", key="nova_sem", use_container_width=True):
+                        _resetar_alavancagem()
+                        st.rerun()
+                return
+
+            odd_total = float(resultado.get("odd_total", st.session_state.alav_odd_alvo))
+            retorno   = round(entrada_info["valor"] * odd_total, 2)
+            st.session_state.alav_entradas[atual]["bilhete"]   = resultado.get("bilhete", [])
+            st.session_state.alav_entradas[atual]["odd"]       = odd_total
+            st.session_state.alav_entradas[atual]["retorno"]   = retorno
+            st.session_state.alav_entradas[atual]["lucro"]     = round(retorno - entrada_info["valor"], 2)
+            st.session_state.alav_entradas[atual]["confianca"] = resultado.get("confianca", 0)
+            st.session_state.alav_entradas[atual]["tipo"]      = resultado.get("tipo", "simples")
+            st.rerun()
+
+        # Exibe bilhete da entrada atual
+        entrada_info = entradas[atual]
+        tipo  = entrada_info.get("tipo", "simples")
+        conf  = entrada_info.get("confianca", 0)
+        cor   = "#22c55e" if conf >= 80 else "#f59e0b" if conf >= 65 else "#ef4444"
+
+        st.markdown(
+            f"#### Entrada #{entrada_info['entrada']} — "
+            f"{'Combinada 2 jogos' if tipo == 'combinada' else 'Simples'}"
+        )
+        st.markdown(
+            f"**R$ {entrada_info['valor']}** @ **{entrada_info['odd']}x** "
+            f"→ **R$ {entrada_info['retorno']}**"
+        )
+        st.markdown(
+            f"<span style='color:{cor};font-weight:700'>Score de confiança: {conf}/100</span>",
+            unsafe_allow_html=True
+        )
+
+        for b in entrada_info.get("bilhete", []):
+            st.info(
+                f"**{b.get('jogo', '')}** | {b.get('liga', '')}\n\n"
+                f"Aposta: **{b.get('mercado', '')}** @ {b.get('odd', '')}\n\n"
+                f"Motivo: {b.get('motivo', '')}"
+            )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("✅ GREEN - Acertei!", key=f"green_{atual}", use_container_width=True):
+                st.session_state.alav_entradas[atual]["status"] = True
+                st.session_state.alav_entradas[atual]["data"]   = datetime.now().strftime("%d/%m %H:%M")
+                st.session_state.alav_entrada_atual = atual + 1
+                if supabase:
+                    for b in entrada_info.get("bilhete", []):
+                        salvar_entrada(supabase, {
+                            "entrada": entrada_info["entrada"],
+                            "jogo": b.get("jogo", ""),
+                            "mercado": b.get("mercado", ""),
+                            "odd": b.get("odd", 0),
+                            "liga": b.get("liga", ""),
+                            "resultado": "GREEN",
+                            "valor": entrada_info["valor"],
+                            "retorno": entrada_info["retorno"],
+                            "confianca": conf,
+                        })
+                st.rerun()
+        with c2:
+            if st.button("❌ RED - Errei", key=f"red_{atual}", use_container_width=True):
+                st.session_state.alav_entradas[atual]["status"] = False
+                st.session_state.alav_entradas[atual]["data"]   = datetime.now().strftime("%d/%m %H:%M")
+                st.session_state.alav_entrada_atual = len(entradas)
+                if supabase:
+                    for b in entrada_info.get("bilhete", []):
+                        salvar_entrada(supabase, {
+                            "entrada": entrada_info["entrada"],
+                            "jogo": b.get("jogo", ""),
+                            "mercado": b.get("mercado", ""),
+                            "odd": b.get("odd", 0),
+                            "liga": b.get("liga", ""),
+                            "resultado": "RED",
+                            "valor": entrada_info["valor"],
+                            "retorno": 0,
+                            "confianca": conf,
+                        })
+                st.rerun()
+
+    # Histórico
+    st.markdown("---")
+    st.markdown("### 📋 Histórico desta alavancagem")
+    for entrada in entradas:
+        if entrada["status"] is None:
+            continue
+        linha = f"#{entrada['entrada']} | R$ {entrada['valor']} → R$ {entrada['retorno']}"
+        for b in entrada.get("bilhete", []):
+            linha += f" | {b.get('jogo', '')} — {b.get('mercado', '')}"
+        if entrada["status"] is True:
+            st.success(linha)
+        else:
+            st.error(linha)
+
+    # Finalização
+    if atual >= len(entradas):
+        if all(e["status"] is True for e in entradas):
+            retorno_final = entradas[-1]["retorno"]
+            lucro = round(retorno_final - st.session_state.alav_banca_inicial, 2)
+            st.success(f"🏆 COMPLETO! R$ {retorno_final} | Lucro: +R$ {lucro}")
+        else:
+            st.error("❌ Alavancagem encerrada com RED. Recomece com a banca inicial.")
+
+    if st.button("🔄 Nova Alavancagem", use_container_width=True):
+        _resetar_alavancagem()
+        st.rerun()
+
+
+def _resetar_alavancagem():
+    for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
+        st.session_state.pop(k, None)
