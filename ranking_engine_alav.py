@@ -1,4 +1,4 @@
- """
+"""
 ranking_engine_alav.py
 ======================
 ETAPA 1 da nova arquitetura:
