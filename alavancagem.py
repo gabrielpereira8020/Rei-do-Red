@@ -327,29 +327,39 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         )
 
         if not odds_txt:
-            log_etapa(f"  ⚠️ Sem odds para: {jogo['nome']}")
+            log_etapa(f"  ⚠️ Sem odds: {jogo['nome']} (nao encontrado na Odds API)")
             continue
 
         jogo["odds_txt"] = odds_txt
         jogo["tem_odds"] = True
 
-        # Valida se a odd do mercado escolhido está na faixa
+        # Tenta extrair odd na faixa configurada
         melhor_odd = _extrair_melhor_odd(odds_txt, odd_min, odd_max)
-        if melhor_odd:
-            aprovado, motivo_odd = validar_odd_para_entrada(melhor_odd, odd_min, odd_max, jogo["ia_confianca"])
-            jogo["melhor_odd"] = melhor_odd
-            if aprovado:
-                jogos_com_odds.append(jogo)
-                log_etapa(f"  ✅ Odd aprovada: {jogo['nome']} @ {melhor_odd}")
-            else:
-                log_etapa(f"  ❌ Odd recusada: {jogo['nome']} — {motivo_odd}")
+
+        if not melhor_odd:
+            # Tenta mostrar quais odds existem para debug
+            import re as _re
+            todas = _re.findall(r"@([\d.]+)", odds_txt)
+            log_etapa(f"  ⚠️ {jogo['nome']}: odds disponiveis {todas} — nenhuma na faixa {odd_min}-{odd_max}")
+            continue
+
+        aprovado, motivo_odd = validar_odd_para_entrada(
+            melhor_odd, odd_min, odd_max, jogo["ia_confianca"]
+        )
+        jogo["melhor_odd"] = melhor_odd
+
+        if aprovado:
+            jogos_com_odds.append(jogo)
+            log_etapa(f"  ✅ Odd aprovada: {jogo['nome']} @ {melhor_odd} ({jogo['ia_mercado']})")
         else:
-            log_etapa(f"  ⚠️ Nenhuma odd na faixa {odd_min}-{odd_max} para: {jogo['nome']}")
+            log_etapa(f"  ❌ Odd recusada: {jogo['nome']} @ {melhor_odd} — {motivo_odd}")
 
     prog4.empty()
     etapa1.empty()
 
-    log_etapa(f"Pipeline concluído: {len(jogos_com_odds)} jogos prontos para o bilhete")
+    log_etapa(f"Pipeline concluido: {len(jogos_com_odds)} jogos prontos para o bilhete")
+    # Salva log no session_state para exibir na tela principal
+    st.session_state["alav_ultimo_log"] = st.session_state.get("alav_log_etapas", [])
     return jogos_com_odds
 
 
@@ -703,4 +713,3 @@ def _tela_execucao(supabase):
 def _resetar_alavancagem():
     for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
         st.session_state.pop(k, None)
- 
