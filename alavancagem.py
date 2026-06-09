@@ -186,10 +186,12 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
         + "INSTRUÇÕES:\n"
         "1. Use SOMENTE os jogos listados acima — todos têm odds confirmadas\n"
         "2. Use as odds EXATAS da lista — NUNCA invente valores\n"
-        "3. Simples = 1 jogo. Combinada = 2 jogos de ligas DIFERENTES\n"
+        "3. Simples = 1 jogo com odd já na faixa. Combinada = 2 jogos (MULTIPLICAR as odds: ex 1.18 x 1.28 = 1.51)\n"
         f"4. Odd final DEVE estar entre {odd_min}x e {odd_max}x\n"
-        "5. Priorize jogos com maior confiança IA\n"
-        "6. Se nenhum bilhete atingir a faixa de odd, retorne sem_entrada=true\n\n"
+        "5. REGRA PRINCIPAL: Se não encontrar 1 jogo com odd na faixa, TENTE COMBINAR 2 jogos com odds menores que se multiplicados atingem a faixa\n"
+        "   Exemplo: jogo A @ 1.18 + jogo B @ 1.30 = odd combinada 1.18 * 1.30 = 1.534 (dentro da faixa 1.30-2.00) ✅\n"
+        "6. Para combinada, prefira jogos de ligas DIFERENTES com alta confiança\n"
+        "7. Se mesmo combinando não atingir a faixa, retorne sem_entrada=true\n\n"
         "Responda SOMENTE JSON sem markdown:\n"
         "{\"sem_entrada\": false, \"tipo\": \"simples\", \"odd_total\": 1.45, "
         "\"confianca\": 85, \"motivo_recusa\": \"\", "
@@ -333,26 +335,39 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         jogo["odds_txt"] = odds_txt
         jogo["tem_odds"] = True
 
-        # Tenta extrair odd na faixa configurada
+        # Tenta extrair a melhor odd disponível (aceita abaixo do mínimo para combinadas)
         melhor_odd = _extrair_melhor_odd(odds_txt, odd_min, odd_max)
 
         if not melhor_odd:
-            # Tenta mostrar quais odds existem para debug
             import re as _re
             todas = _re.findall(r"@([\d.]+)", odds_txt)
-            log_etapa(f"  ⚠️ {jogo['nome']}: odds disponiveis {todas} — nenhuma na faixa {odd_min}-{odd_max}")
+            log_etapa(f"  ⚠️ {jogo['nome']}: odds disponiveis {todas} — nenhuma aproveitável")
             continue
 
-        aprovado, motivo_odd = validar_odd_para_entrada(
-            melhor_odd, odd_min, odd_max, jogo["ia_confianca"]
-        )
         jogo["melhor_odd"] = melhor_odd
 
-        if aprovado:
-            jogos_com_odds.append(jogo)
-            log_etapa(f"  ✅ Odd aprovada: {jogo['nome']} @ {melhor_odd} ({jogo['ia_mercado']})")
+        # Jogo com odd já na faixa ideal → aprovado diretamente
+        if melhor_odd >= odd_min:
+            aprovado, motivo_odd = validar_odd_para_entrada(
+                melhor_odd, odd_min, odd_max, jogo["ia_confianca"]
+            )
+            if aprovado:
+                jogo["candidato_combinada"] = False
+                jogos_com_odds.append(jogo)
+                log_etapa(f"  ✅ Odd aprovada (simples): {jogo['nome']} @ {melhor_odd} ({jogo['ia_mercado']})")
+            else:
+                log_etapa(f"  ❌ Odd recusada: {jogo['nome']} @ {melhor_odd} — {motivo_odd}")
         else:
-            log_etapa(f"  ❌ Odd recusada: {jogo['nome']} @ {melhor_odd} — {motivo_odd}")
+            # Odd abaixo do mínimo mas com confiança alta → candidato para combinada
+            if jogo["ia_confianca"] >= confianca_min:
+                jogo["candidato_combinada"] = True
+                jogos_com_odds.append(jogo)
+                log_etapa(
+                    f"  🔗 Candidato combinada: {jogo['nome']} @ {melhor_odd} "
+                    f"(confiança {jogo['ia_confianca']}) — pode ser combinado para atingir odd alvo"
+                )
+            else:
+                log_etapa(f"  ❌ Descartado: {jogo['nome']} @ {melhor_odd} — odd baixa e confiança insuficiente")
 
     prog4.empty()
     etapa1.empty()
@@ -364,21 +379,31 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
 
 
 def _extrair_melhor_odd(odds_txt, odd_min, odd_max):
-    """Extrai a melhor odd dentro da faixa do texto de odds."""
+    """
+    Extrai a melhor odd do texto de odds.
+    Aceita odds entre ODD_COMBINADA_MIN e odd_max para que jogos
+    com odds baixas possam ser combinados e atingir a faixa alvo.
+    """
     import re
+    ODD_COMBINADA_MIN = 1.10  # aceita odds baixas para montar combinadas
     try:
         matches = re.findall(r'@([\d.]+)', odds_txt)
-        odds_na_faixa = []
+        odds_validas = []
         for m in matches:
             try:
                 v = float(m)
-                if odd_min <= v <= odd_max:
-                    odds_na_faixa.append(v)
+                if ODD_COMBINADA_MIN <= v <= odd_max:
+                    odds_validas.append(v)
             except Exception:
                 pass
-        if odds_na_faixa:
-            centro = (odd_min + odd_max) / 2
-            return min(odds_na_faixa, key=lambda x: abs(x - centro))
+        if odds_validas:
+            # Prioriza odds dentro da faixa ideal; se não houver, pega a maior disponível
+            odds_na_faixa = [v for v in odds_validas if v >= odd_min]
+            if odds_na_faixa:
+                centro = (odd_min + odd_max) / 2
+                return min(odds_na_faixa, key=lambda x: abs(x - centro))
+            # Odds abaixo do mínimo — retorna a maior (candidata para combinada)
+            return max(odds_validas)
     except Exception:
         pass
     return None
@@ -713,3 +738,5 @@ def _tela_execucao(supabase):
 def _resetar_alavancagem():
     for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
         st.session_state.pop(k, None)
+
+                
