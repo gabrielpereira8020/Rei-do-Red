@@ -1,404 +1,561 @@
 """
 oddspapi_engine.py
 ==================
-Integracao com OddsPapi (https://oddspapi.com)
+Integração com OddsPapi (https://oddspapi.io)
+350+ bookmakers | 460+ mercados | Pinnacle incluso
 
-Vantagens:
-  - 350+ bookmakers (incluindo Pinnacle)
-  - 460+ mercados
-  - 1 request retorna tudo de uma vez
-  - 1.000 requests/mes gratis
+Plano gratuito: 250 requests/mês
+1 request = retorna todos os bookmakers de uma vez
 
-Como usar no secrets.toml:
+MERCADOS MAPEADOS (market IDs):
+  101 — Full Time Result (1x2)
+  104 — Both Teams To Score (Ambos marcam)
+  106 — Over/Under Full Time
+  109 — Double Chance
+  (mais mercados carregados dinamicamente)
+
+secrets.toml:
   ODDSPAPI_KEY = "sua_chave_aqui"
-
-Documentacao: https://oddspapi.com/docs
 """
 
 import requests
 import unicodedata
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
-BASE_URL = "https://api.oddspapi.com"
+BASE_URL = "https://api.oddspapi.io/v4"
+SPORT_ID = 10  # Futebol
 
-# -------------------------------------------
-# MAPEAMENTO: liga_id API Football → sport/league OddsPapi
-# -------------------------------------------
-LIGA_PARA_ODDSPAPI = {
-    # BRASIL
-    71:  {"sport": "football", "league": "brazil_serie_a"},
-    72:  {"sport": "football", "league": "brazil_serie_b"},
-    73:  {"sport": "football", "league": "brazil_serie_c"},
+# ─────────────────────────────────────────────
+# IDs de mercado fixos (documentação OddsPapi)
+# ─────────────────────────────────────────────
+MARKET_FULL_TIME_RESULT  = 101   # 1x2: outcome 101=home, 102=draw, 103=away
+MARKET_BTTS              = 104   # Ambos marcam: 104=Yes, 105=No
+MARKET_OVER_UNDER        = 106   # Over/Under FT (vários handicaps)
+MARKET_DOUBLE_CHANCE     = 109   # Double Chance: 1X, 12, X2
 
-    # INGLATERRA
-    39:  {"sport": "football", "league": "england_premier_league"},
-    40:  {"sport": "football", "league": "england_championship"},
-    41:  {"sport": "football", "league": "england_league_one"},
-    42:  {"sport": "football", "league": "england_league_two"},
+# Bookmaker preferido (Pinnacle = melhor cobertura)
+BOOKMAKER_PRINCIPAL = "pinnacle"
+BOOKMAKER_FALLBACK  = "unibet"
 
-    # ESPANHA
-    140: {"sport": "football", "league": "spain_la_liga"},
-    141: {"sport": "football", "league": "spain_segunda_division"},
-
-    # ITALIA
-    135: {"sport": "football", "league": "italy_serie_a"},
-    136: {"sport": "football", "league": "italy_serie_b"},
-
-    # ALEMANHA
-    78:  {"sport": "football", "league": "germany_bundesliga"},
-    79:  {"sport": "football", "league": "germany_2_bundesliga"},
-
-    # FRANCA
-    61:  {"sport": "football", "league": "france_ligue_1"},
-    62:  {"sport": "football", "league": "france_ligue_2"},
-
-    # PORTUGAL
-    94:  {"sport": "football", "league": "portugal_primeira_liga"},
-    95:  {"sport": "football", "league": "portugal_segunda_liga"},
-
-    # HOLANDA
-    88:  {"sport": "football", "league": "netherlands_eredivisie"},
-
-    # BELGICA
-    144: {"sport": "football", "league": "belgium_first_division_a"},
-
-    # TURQUIA
-    203: {"sport": "football", "league": "turkey_super_lig"},
-
-    # ESCOCIA
-    179: {"sport": "football", "league": "scotland_premiership"},
-
-    # SUICA
-    207: {"sport": "football", "league": "switzerland_super_league"},
-
-    # ESCANDINAVIA
-    103: {"sport": "football", "league": "norway_eliteserien"},
-    113: {"sport": "football", "league": "sweden_allsvenskan"},
-    119: {"sport": "football", "league": "denmark_superliga"},
-
-    # AMERICAS
-    128: {"sport": "football", "league": "argentina_primera_division"},
-    129: {"sport": "football", "league": "argentina_primera_nacional"},
-    262: {"sport": "football", "league": "mexico_liga_mx"},
-    253: {"sport": "football", "league": "usa_mls"},
-    254: {"sport": "football", "league": "usa_usl_championship"},
-    266: {"sport": "football", "league": "chile_primera_division"},
-    268: {"sport": "football", "league": "colombia_primera_a"},
-    299: {"sport": "football", "league": "peru_primera_division"},
-
-    # ASIA
-    98:  {"sport": "football", "league": "japan_j1_league"},
-    99:  {"sport": "football", "league": "japan_j2_league"},
-    291: {"sport": "football", "league": "south_korea_k_league_1"},
-    293: {"sport": "football", "league": "south_korea_k_league_2"},
-    307: {"sport": "football", "league": "saudi_arabia_pro_league"},
-
-    # COMPETICOES INTERNACIONAIS
-    2:   {"sport": "football", "league": "uefa_champions_league"},
-    3:   {"sport": "football", "league": "uefa_europa_league"},
-    848: {"sport": "football", "league": "uefa_conference_league"},
-    13:  {"sport": "football", "league": "conmebol_libertadores"},
-    11:  {"sport": "football", "league": "conmebol_sudamericana"},
-    1:   {"sport": "football", "league": "fifa_world_cup"},
-    15:  {"sport": "football", "league": "fifa_club_world_cup"},
-    16:  {"sport": "football", "league": "concacaf_champions_cup"},
-
-    # AMISTOSOS
-    9:   {"sport": "football", "league": "international_friendlies"},
-    10:  {"sport": "football", "league": "international_friendlies"},
-    667: {"sport": "football", "league": "club_friendlies"},
-}
-
-# Mercados suportados pelo OddsPapi
-MERCADOS_ODDSPAPI = {
-    "vitoria mandante":  "1x2",
-    "vitoria visitante": "1x2",
-    "empate":            "1x2",
-    "double chance 1x":  "double_chance",
-    "double chance x2":  "double_chance",
-    "over 0.5 ht":       "totals",
-    "over 1.5 ft":       "totals",
-    "over 2.5 ft":       "totals",
-    "over 3.5 ft":       "totals",
-    "under 4.5 ft":      "totals",
-    "ambos marcam sim":  "btts",
-    "ambos marcam nao":  "btts",
+# ─────────────────────────────────────────────
+# MAPEAMENTO liga_id (API Football) → tournament_id (OddsPapi)
+# Busca dinâmica caso não encontre aqui
+# ─────────────────────────────────────────────
+LIGA_PARA_TOURNAMENT = {
+    # ── BRASIL ──────────────────────────────
+    71:  None,   # Brasileirão Série A  (busca por nome)
+    72:  None,   # Brasileirão Série B
+    73:  None,   # Brasileirão Série C
+    # ── INTERNACIONAIS ──────────────────────
+    1:   None,   # FIFA World Cup
+    2:   None,   # UEFA Champions League
+    3:   None,   # UEFA Europa League
+    9:   None,   # Amistosos internacionais
+    10:  None,   # Amistosos internacionais
+    13:  None,   # Libertadores
+    11:  None,   # Sudamericana
+    # ── LIGAS TOP ───────────────────────────
+    39:  None,   # Premier League
+    78:  None,   # Bundesliga
+    135: None,   # Serie A
+    140: None,   # La Liga
+    61:  None,   # Ligue 1
 }
 
 
-# -------------------------------------------
-# BUSCA PRINCIPAL
-# -------------------------------------------
-
-def buscar_odds_jogo(home, away, liga_id, api_key, odd_min=1.10, odd_max=2.50):
-    """
-    Busca odds de um jogo especifico no OddsPapi.
-    Retorna dict com odds ou None se nao encontrar.
-    """
-    if not api_key:
-        return None
-
-    config = LIGA_PARA_ODDSPAPI.get(liga_id)
-    sport  = config["sport"]  if config else "football"
-    league = config["league"] if config else None
-
-    try:
-        params = {
-            "apiKey": api_key,
-            "sport":  sport,
-        }
-        if league:
-            params["league"] = league
-
-        r = requests.get(
-            f"{BASE_URL}/odds",
-            params=params,
-            timeout=15
-        )
-
-        if r.status_code != 200:
-            return None
-
-        data  = r.json()
-        jogos = data.get("data", data) if isinstance(data, dict) else data
-
-        if not isinstance(jogos, list):
-            return None
-
-        jogo_match = _encontrar_jogo(jogos, home, away)
-        if not jogo_match:
-            return None
-
-        return jogo_match
-
-    except Exception:
-        return None
-
-
-def buscar_odds_em_lote(api_key, liga_id):
-    """
-    Busca TODOS os jogos de uma liga de uma vez.
-    1 request = todos os jogos da liga. Muito economico.
-    Retorna lista de jogos com odds.
-    """
-    if not api_key:
-        return []
-
-    config = LIGA_PARA_ODDSPAPI.get(liga_id)
-    sport  = config["sport"]  if config else "football"
-    league = config["league"] if config else None
-
-    try:
-        params = {"apiKey": api_key, "sport": sport}
-        if league:
-            params["league"] = league
-
-        r = requests.get(f"{BASE_URL}/odds", params=params, timeout=15)
-        if r.status_code != 200:
-            return []
-
-        data = r.json()
-        return data.get("data", data) if isinstance(data, dict) else data
-
-    except Exception:
-        return []
-
-
-def extrair_melhor_odd(jogo_dict, mercado_ia, odd_min, odd_max):
-    """
-    Extrai a melhor odd para o mercado sugerido pela IA.
-    Retorna (odd_valor, bookmaker, mercado_txt) ou (None, None, None).
-    """
-    if not jogo_dict:
-        return None, None, None
-
-    mercado_lower = mercado_ia.lower().strip()
-    home_n = _norm(jogo_dict.get("home_team", jogo_dict.get("home", "")))
-    away_n = _norm(jogo_dict.get("away_team", jogo_dict.get("away", "")))
-
-    melhor_odd = None
-    melhor_bm  = None
-    melhor_txt = None
-
-    # Bookmakers podem estar em varios formatos
-    bookmakers = (
-        jogo_dict.get("bookmakers", []) or
-        jogo_dict.get("odds", []) or
-        []
-    )
-
-    for bm in bookmakers:
-        bm_nome  = bm.get("name", bm.get("title", bm.get("bookmaker", "")))
-        mercados = bm.get("markets", bm.get("odds", []))
-
-        for market in mercados:
-            market_key = market.get("key", market.get("market", market.get("name", ""))).lower()
-            outcomes   = market.get("outcomes", market.get("selections", []))
-
-            odd_val = None
-            odd_txt = ""
-
-            # --- Over / Under ---
-            if "over" in mercado_lower or "under" in mercado_lower:
-                direcao = "over" if "over" in mercado_lower else "under"
-                ponto   = _extrair_numero(mercado_lower)
-                if "total" in market_key or "goal" in market_key or "over" in market_key:
-                    for o in outcomes:
-                        nome_o = str(o.get("name", o.get("label", ""))).lower()
-                        pt     = o.get("point", o.get("handicap", o.get("line", None)))
-                        preco  = _preco(o)
-                        if direcao in nome_o and (pt is None or float(pt) == ponto):
-                            odd_val = preco
-                            odd_txt = f"Over {ponto}"
-
-            # --- Vitoria mandante ---
-            elif "vitoria mandante" in mercado_lower or "home" in mercado_lower:
-                if "1x2" in market_key or "match" in market_key or "winner" in market_key:
-                    for o in outcomes:
-                        nome_o = _norm(str(o.get("name", o.get("label", ""))))
-                        preco  = _preco(o)
-                        if nome_o == home_n or nome_o in ("1", "home"):
-                            odd_val = preco
-                            odd_txt = "Vitoria Mandante"
-
-            # --- Vitoria visitante ---
-            elif "vitoria visitante" in mercado_lower:
-                if "1x2" in market_key or "match" in market_key or "winner" in market_key:
-                    for o in outcomes:
-                        nome_o = _norm(str(o.get("name", o.get("label", ""))))
-                        preco  = _preco(o)
-                        if nome_o == away_n or nome_o in ("2", "away"):
-                            odd_val = preco
-                            odd_txt = "Vitoria Visitante"
-
-            # --- Double Chance 1X ---
-            elif "1x" in mercado_lower:
-                if "double" in market_key or "chance" in market_key or "dc" in market_key:
-                    for o in outcomes:
-                        nome_o = str(o.get("name", o.get("label", ""))).upper()
-                        if "1X" in nome_o or "HOME OR DRAW" in nome_o:
-                            odd_val = _preco(o)
-                            odd_txt = "Double Chance 1X"
-
-            # --- Double Chance X2 ---
-            elif "x2" in mercado_lower:
-                if "double" in market_key or "chance" in market_key or "dc" in market_key:
-                    for o in outcomes:
-                        nome_o = str(o.get("name", o.get("label", ""))).upper()
-                        if "X2" in nome_o or "DRAW OR AWAY" in nome_o:
-                            odd_val = _preco(o)
-                            odd_txt = "Double Chance X2"
-
-            # --- Ambos Marcam ---
-            elif "ambos" in mercado_lower or "btts" in mercado_lower:
-                if "btts" in market_key or "both" in market_key or "score" in market_key:
-                    for o in outcomes:
-                        nome_o = str(o.get("name", o.get("label", ""))).lower()
-                        if "yes" in nome_o or "sim" in nome_o:
-                            odd_val = _preco(o)
-                            odd_txt = "Ambos Marcam Sim"
-
-            # Valida se a odd esta na faixa
-            if odd_val and odd_min <= odd_val <= odd_max:
-                if melhor_odd is None or odd_val < melhor_odd:
-                    melhor_odd = odd_val
-                    melhor_bm  = bm_nome
-                    melhor_txt = odd_txt
-
-    return melhor_odd, melhor_bm, melhor_txt
-
-
-def montar_texto_odds(jogo_dict):
-    """Formata odds para enviar ao contexto da IA."""
-    if not jogo_dict:
-        return ""
-    home = jogo_dict.get("home_team", jogo_dict.get("home", "Casa"))
-    away = jogo_dict.get("away_team", jogo_dict.get("away", "Fora"))
-    linhas = [f"Odds disponiveis: {home} x {away}"]
-    for bm in jogo_dict.get("bookmakers", [])[:2]:
-        nome = bm.get("name", bm.get("title", ""))
-        for market in bm.get("markets", [])[:3]:
-            for o in market.get("outcomes", [])[:4]:
-                label = o.get("name", o.get("label", ""))
-                preco = _preco(o)
-                pt    = o.get("point", "")
-                pt_txt = f" {pt}" if pt else ""
-                linhas.append(f"  {nome} | {label}{pt_txt} @ {preco}")
-    return "\n".join(linhas)
-
-
-def verificar_cota(api_key):
-    """Verifica cota restante da API."""
-    try:
-        r = requests.get(
-            f"{BASE_URL}/sports",
-            params={"apiKey": api_key},
-            timeout=10
-        )
-        headers = r.headers
-        return {
-            "restantes": headers.get("x-requests-remaining", "?"),
-            "usadas":    headers.get("x-requests-used", "?"),
-            "limite":    headers.get("x-requests-limit", "?"),
-        }
-    except Exception:
-        return {"restantes": "?", "usadas": "?", "limite": "?"}
-
-
-# -------------------------------------------
+# ─────────────────────────────────────────────
 # HELPERS
-# -------------------------------------------
+# ─────────────────────────────────────────────
 
 def _norm(nome):
-    """Normaliza nome de time para comparacao."""
+    """Normaliza nome de time: minúsculo, sem acento, sem sufixos."""
     nome = str(nome).lower().strip()
     nome = "".join(
         c for c in unicodedata.normalize("NFD", nome)
         if unicodedata.category(c) != "Mn"
     )
-    for suf in [" fc"," cf"," sc"," ac"," sk"," fk"," bk"," if"," ff",
-                " united"," city"," athletic"," atletico"," sporting"," club"]:
+    for suf in [" fc", " cf", " sc", " ac", " sk", " fk", " bk",
+                " united", " city", " athletic", " atletico", " sporting"]:
         nome = nome.replace(suf, "")
     return nome.strip()
 
 
-def _encontrar_jogo(jogos, home, away):
-    """Fuzzy match para encontrar o jogo na lista."""
-    home_n = _norm(home)
-    away_n = _norm(away)
+def _score_match(home_api, away_api, home_ev, away_ev):
+    """Pontuação de similaridade entre dois pares de nomes."""
+    h1, h2 = _norm(home_api), _norm(home_ev)
+    a1, a2 = _norm(away_api), _norm(away_ev)
+    sc = 0
+    if h1 == h2 or h1 in h2 or h2 in h1: sc += 2
+    elif set(h1.split()) & set(h2.split()): sc += 1
+    if a1 == a2 or a1 in a2 or a2 in a1: sc += 2
+    elif set(a1.split()) & set(a2.split()): sc += 1
+    return sc
+
+
+def _extrair_preco(bookmaker_odds, market_id, outcome_id, handicap=None):
+    """
+    Extrai preço de um mercado/outcome específico.
+    bookmaker_odds = dados de um bookmaker dentro de fixture['bookmakerOdds']
+    """
+    try:
+        market = bookmaker_odds.get("markets", {}).get(str(market_id), {})
+        outcome = market.get("outcomes", {}).get(str(outcome_id), {})
+        players = outcome.get("players", {})
+        if not players:
+            return None
+        # Pega o primeiro player ativo
+        for p in players.values():
+            if p.get("active", True):
+                price = p.get("price")
+                if price and float(price) > 1.0:
+                    return float(price)
+    except Exception:
+        pass
+    return None
+
+
+# ─────────────────────────────────────────────
+# BUSCA DE TORNEIOS (cache simples em memória)
+# ─────────────────────────────────────────────
+_cache_torneios = None
+
+def _get_torneios(api_key):
+    global _cache_torneios
+    if _cache_torneios is not None:
+        return _cache_torneios
+    try:
+        r = requests.get(
+            f"{BASE_URL}/tournaments",
+            params={"apiKey": api_key, "sportId": SPORT_ID},
+            timeout=15
+        )
+        if r.status_code == 200:
+            _cache_torneios = r.json()
+            return _cache_torneios
+    except Exception:
+        pass
+    return []
+
+
+def _encontrar_tournament_id(liga_nome, api_key):
+    """Busca tournament_id pelo nome da liga."""
+    torneios = _get_torneios(api_key)
+    liga_n = _norm(liga_nome)
     melhor, melhor_sc = None, 0
-
-    for jogo in jogos:
-        jh = _norm(jogo.get("home_team", jogo.get("home", "")))
-        ja = _norm(jogo.get("away_team", jogo.get("away", "")))
-
+    for t in torneios:
+        nome_t = _norm(t.get("tournamentName", ""))
+        cat_t  = _norm(t.get("categoryName", ""))
         sc = 0
-        if home_n == jh or home_n in jh or jh in home_n: sc += 2
-        elif set(home_n.split()) & set(jh.split()):        sc += 1
-        if away_n == ja or away_n in ja or ja in away_n:  sc += 2
-        elif set(away_n.split()) & set(ja.split()):        sc += 1
+        if liga_n == nome_t or liga_n in nome_t or nome_t in liga_n:
+            sc += 2
+        elif set(liga_n.split()) & set(nome_t.split()):
+            sc += 1
+        if sc > melhor_sc:
+            melhor_sc = sc
+            melhor = t.get("tournamentId")
+    return melhor if melhor_sc >= 1 else None
 
-        if sc > melhor_sc and sc >= 2:
-            melhor_sc, melhor = sc, jogo
+
+# ─────────────────────────────────────────────
+# BUSCA PRINCIPAL — por nome do jogo
+# ─────────────────────────────────────────────
+
+def buscar_odds_jogo(home, away, liga_id, liga_nome, api_key, odd_min=1.10, odd_max=2.50):
+    """
+    Busca odds de um jogo específico na OddsPapi.
+
+    Fluxo:
+      1. Descobre tournament_id pelo liga_id ou nome da liga
+      2. Busca fixtures desse torneio com odds do Pinnacle
+      3. Casa o jogo pelo nome (fuzzy match)
+      4. Extrai todos os mercados relevantes
+
+    Retorna dict com odds formatadas ou None se não encontrar.
+    """
+    if not api_key:
+        return None
+
+    # Descobre tournament_id
+    tournament_id = LIGA_PARA_TOURNAMENT.get(liga_id)
+    if not tournament_id and liga_nome:
+        tournament_id = _encontrar_tournament_id(liga_nome, api_key)
+    if not tournament_id:
+        return None
+
+    # Tenta Pinnacle primeiro, depois fallback
+    for bookmaker in [BOOKMAKER_PRINCIPAL, BOOKMAKER_FALLBACK]:
+        try:
+            r = requests.get(
+                f"{BASE_URL}/odds-by-tournaments",
+                params={
+                    "apiKey": api_key,
+                    "bookmaker": bookmaker,
+                    "tournamentIds": str(tournament_id),
+                    "oddsFormat": "decimal",
+                },
+                timeout=15
+            )
+            if r.status_code != 200:
+                continue
+
+            fixtures = r.json()
+            if not isinstance(fixtures, list):
+                continue
+
+            # Casa o jogo pelo nome dos participantes
+            melhor_fixture = None
+            melhor_sc = 0
+
+            for fix in fixtures:
+                # OddsPapi usa participant IDs, precisa buscar nomes
+                p1 = str(fix.get("participant1Id", ""))
+                p2 = str(fix.get("participant2Id", ""))
+                # Tenta pelo campo nome se disponível
+                nome1 = fix.get("participant1Name", fix.get("home", ""))
+                nome2 = fix.get("participant2Name", fix.get("away", ""))
+
+                if not nome1 or not nome2:
+                    continue
+
+                sc = _score_match(home, away, nome1, nome2)
+                if sc > melhor_sc and sc >= 2:
+                    melhor_sc = sc
+                    melhor_fixture = fix
+
+            if melhor_fixture:
+                return _processar_fixture(melhor_fixture, bookmaker, odd_min, odd_max, home, away)
+
+        except Exception:
+            continue
+
+    return None
+
+
+# ─────────────────────────────────────────────
+# BUSCA EM LOTE — para múltiplos jogos de uma vez
+# ─────────────────────────────────────────────
+
+def buscar_odds_lote(jogos_aprovados, api_key, odd_min=1.10, odd_max=2.50):
+    """
+    Busca odds de vários jogos com o mínimo de requests.
+
+    Estratégia:
+      - Agrupa jogos por tournament_id
+      - 1 request por torneio (economiza cota)
+      - Casa cada jogo no resultado
+
+    Retorna dict {nome_jogo: odds_dict}
+    """
+    if not api_key or not jogos_aprovados:
+        return {}
+
+    # Monta mapa tournament_id → lista de jogos
+    torneios_map = {}
+    jogos_sem_torneio = []
+
+    for jogo in jogos_aprovados:
+        liga_id   = jogo.get("liga_id", 0)
+        liga_nome = jogo.get("liga_nome", "")
+        tid = LIGA_PARA_TOURNAMENT.get(liga_id)
+        if not tid and liga_nome:
+            tid = _encontrar_tournament_id(liga_nome, api_key)
+        if tid:
+            torneios_map.setdefault(tid, []).append(jogo)
+        else:
+            jogos_sem_torneio.append(jogo)
+
+    resultado = {}
+
+    # Busca por torneio (1 request por torneio)
+    for tid, jogos_do_torneio in torneios_map.items():
+        for bookmaker in [BOOKMAKER_PRINCIPAL, BOOKMAKER_FALLBACK]:
+            try:
+                r = requests.get(
+                    f"{BASE_URL}/odds-by-tournaments",
+                    params={
+                        "apiKey": api_key,
+                        "bookmaker": bookmaker,
+                        "tournamentIds": str(tid),
+                        "oddsFormat": "decimal",
+                    },
+                    timeout=15
+                )
+                if r.status_code != 200:
+                    continue
+
+                fixtures = r.json()
+                if not isinstance(fixtures, list):
+                    continue
+
+                # Casa cada jogo aprovado com os fixtures retornados
+                for jogo in jogos_do_torneio:
+                    if jogo["nome"] in resultado:
+                        continue  # já encontrou
+
+                    melhor_fix, melhor_sc = None, 0
+                    for fix in fixtures:
+                        nome1 = fix.get("participant1Name", fix.get("home", ""))
+                        nome2 = fix.get("participant2Name", fix.get("away", ""))
+                        if not nome1 or not nome2:
+                            continue
+                        sc = _score_match(jogo.get("casa",""), jogo.get("fora",""), nome1, nome2)
+                        if sc > melhor_sc and sc >= 2:
+                            melhor_sc = sc
+                            melhor_fix = fix
+
+                    if melhor_fix:
+                        odds = _processar_fixture(
+                            melhor_fix, bookmaker, odd_min, odd_max,
+                            jogo.get("casa",""), jogo.get("fora","")
+                        )
+                        if odds:
+                            resultado[jogo["nome"]] = odds
+
+                break  # se Pinnacle funcionou, não precisa tentar Unibet
+
+            except Exception:
+                continue
+
+    return resultado
+
+
+# ─────────────────────────────────────────────
+# PROCESSAMENTO DE FIXTURE
+# ─────────────────────────────────────────────
+
+def _processar_fixture(fixture, bookmaker, odd_min, odd_max, home_orig, away_orig):
+    """
+    Extrai todos os mercados relevantes de um fixture e retorna dict formatado.
+    """
+    bm_odds = fixture.get("bookmakerOdds", {}).get(bookmaker, {})
+    if not bm_odds:
+        return None
+
+    markets = bm_odds.get("markets", {})
+    if not markets:
+        return None
+
+    nome1 = fixture.get("participant1Name", home_orig)
+    nome2 = fixture.get("participant2Name", away_orig)
+
+    resultado = {
+        "home":       nome1,
+        "away":       nome2,
+        "bookmaker":  bookmaker,
+        "fixture_id": fixture.get("fixtureId", ""),
+        "mercados":   {},
+        "odds_txt":   "",
+    }
+
+    linhas = [f"Odds [{bookmaker}]: {nome1} x {nome2}"]
+
+    # ── 1x2 (Full Time Result) ──────────────
+    home_price = _extrair_preco(bm_odds, MARKET_FULL_TIME_RESULT, 101)
+    draw_price = _extrair_preco(bm_odds, MARKET_FULL_TIME_RESULT, 102)
+    away_price = _extrair_preco(bm_odds, MARKET_FULL_TIME_RESULT, 103)
+
+    if home_price:
+        resultado["mercados"]["vitoria_mandante"] = home_price
+        linhas.append(f"  1x2: Mandante@{home_price} | Empate@{draw_price} | Visitante@{away_price}")
+
+    # ── Double Chance ───────────────────────
+    dc_1x = _extrair_preco(bm_odds, MARKET_DOUBLE_CHANCE, 110)   # 1X
+    dc_12 = _extrair_preco(bm_odds, MARKET_DOUBLE_CHANCE, 111)   # 12
+    dc_x2 = _extrair_preco(bm_odds, MARKET_DOUBLE_CHANCE, 112)   # X2
+
+    if dc_1x:
+        resultado["mercados"]["double_chance_1x"] = dc_1x
+        resultado["mercados"]["double_chance_12"] = dc_12
+        resultado["mercados"]["double_chance_x2"] = dc_x2
+        linhas.append(f"  Double Chance: 1X@{dc_1x} | 12@{dc_12} | X2@{dc_x2}")
+
+    # ── Both Teams To Score ─────────────────
+    btts_sim = _extrair_preco(bm_odds, MARKET_BTTS, 104)
+    btts_nao = _extrair_preco(bm_odds, MARKET_BTTS, 105)
+
+    if btts_sim:
+        resultado["mercados"]["btts_sim"] = btts_sim
+        resultado["mercados"]["btts_nao"] = btts_nao
+        linhas.append(f"  Ambos Marcam: Sim@{btts_sim} | Nao@{btts_nao}")
+
+    # ── Over/Under (vários handicaps) ───────
+    # Handicaps comuns: 0.5, 1.5, 2.5, 3.5, 4.5
+    # OddsPapi usa market_id diferente por handicap — varre todos
+    ou_encontrados = []
+    for market_id_str, market_data in markets.items():
+        try:
+            mid = int(market_id_str)
+        except Exception:
+            continue
+
+        outcomes = market_data.get("outcomes", {})
+        # Over/Under tem 2 outcomes (over e under)
+        if len(outcomes) == 2:
+            over_val = under_val = handicap = None
+            for oid_str, outcome_data in outcomes.items():
+                players = outcome_data.get("players", {})
+                for p in players.values():
+                    if not p.get("active", True):
+                        continue
+                    price = p.get("price")
+                    outcome_id = int(oid_str)
+                    # Detecta over/under pelo bookmakerOutcomeId
+                    boid = str(p.get("bookmakerOutcomeId", "")).lower()
+                    if "over" in boid or outcome_id % 2 == 0:
+                        over_val = float(price) if price else None
+                    elif "under" in boid or outcome_id % 2 == 1:
+                        under_val = float(price) if price else None
+
+            if over_val and under_val:
+                # Tenta extrair handicap do market_id (aproximação)
+                # handicaps comuns: 106=0.5, ~110=1.5, ~114=2.5, ~118=3.5, ~122=4.5
+                handicap_est = round(0.5 + ((mid - 106) / 4) * 1.0, 1) if mid >= 106 else None
+                if handicap_est and 0.5 <= handicap_est <= 5.5:
+                    key = f"over_{handicap_est}"
+                    resultado["mercados"][key] = over_val
+                    resultado["mercados"][f"under_{handicap_est}"] = under_val
+                    ou_encontrados.append(f"Over {handicap_est}@{over_val} | Under {handicap_est}@{under_val}")
+
+    if ou_encontrados:
+        linhas.append("  Over/Under: " + " | ".join(ou_encontrados[:4]))
+
+    resultado["odds_txt"] = "\n".join(linhas)
+    return resultado if len(resultado["mercados"]) > 0 else None
+
+
+# ─────────────────────────────────────────────
+# EXTRAIR ODD PARA MERCADO DA IA
+# ─────────────────────────────────────────────
+
+def extrair_odd_para_mercado(odds_dict, mercado_ia, odd_min=1.10, odd_max=2.50):
+    """
+    Dado o dict de odds e o mercado sugerido pela IA,
+    retorna a odd mais adequada.
+    """
+    if not odds_dict:
+        return None
+
+    mercados = odds_dict.get("mercados", {})
+    m = mercado_ia.lower().strip()
+
+    # Vitória mandante
+    if "mandante" in m or "home win" in m:
+        v = mercados.get("vitoria_mandante")
+        if v and odd_min <= v <= odd_max:
+            return v
+
+    # Vitória visitante
+    if "visitante" in m or "away win" in m:
+        v = mercados.get("vitoria_visitante")
+        if v and odd_min <= v <= odd_max:
+            return v
+
+    # Double Chance 1X
+    if "1x" in m:
+        v = mercados.get("double_chance_1x")
+        if v and odd_min <= v <= odd_max:
+            return v
+
+    # Double Chance X2
+    if "x2" in m:
+        v = mercados.get("double_chance_x2")
+        if v and odd_min <= v <= odd_max:
+            return v
+
+    # Double Chance 12
+    if "12" in m and "double" in m:
+        v = mercados.get("double_chance_12")
+        if v and odd_min <= v <= odd_max:
+            return v
+
+    # Ambos marcam
+    if "ambos" in m or "btts" in m:
+        v = mercados.get("btts_sim")
+        if v and odd_min <= v <= odd_max:
+            return v
+
+    # Over X.X
+    over_match = re.search(r"over\s*([\d.]+)", m)
+    if over_match:
+        handicap = float(over_match.group(1))
+        v = mercados.get(f"over_{handicap}")
+        if v and odd_min <= v <= odd_max:
+            return v
+        # Tenta handicaps próximos
+        for key, val in mercados.items():
+            if key.startswith("over_") and val and odd_min <= val <= odd_max:
+                return val
+
+    # Under X.X
+    under_match = re.search(r"under\s*([\d.]+)", m)
+    if under_match:
+        handicap = float(under_match.group(1))
+        v = mercados.get(f"under_{handicap}")
+        if v and odd_min <= v <= odd_max:
+            return v
+
+    # Fallback: melhor odd disponível na faixa
+    melhor = None
+    centro = (odd_min + odd_max) / 2
+    for key, val in mercados.items():
+        if val and odd_min <= val <= odd_max:
+            if melhor is None or abs(val - centro) < abs(melhor - centro):
+                melhor = val
+
+    # Se nada na faixa, tenta abaixo do mínimo (candidato combinada)
+    if not melhor:
+        for key, val in mercados.items():
+            if val and 1.10 <= val < odd_min:
+                if melhor is None or val > melhor:
+                    melhor = val
 
     return melhor
 
 
-def _preco(outcome):
-    """Extrai preco/odd de um outcome em varios formatos."""
-    for campo in ("price", "odd", "odds", "value", "decimal"):
-        v = outcome.get(campo)
-        if v is not None:
-            try:
-                return float(v)
-            except Exception:
-                pass
-    return 0.0
+# ─────────────────────────────────────────────
+# MONTAR TEXTO DE ODDS (para passar à IA)
+# ─────────────────────────────────────────────
+
+def montar_texto_odds(odds_dict, mercado_ia=""):
+    """Retorna texto resumido das odds para a IA processar."""
+    if not odds_dict:
+        return ""
+    return odds_dict.get("odds_txt", "")
 
 
-def _extrair_numero(texto):
-    """Extrai numero float de string como 'over 1.5 ft' -> 1.5"""
-    m = re.search(r"(\d+\.?\d*)", texto)
-    return float(m.group(1)) if m else 1.5
+# ─────────────────────────────────────────────
+# ALIAS para compatibilidade com alavancagem.py
+# ─────────────────────────────────────────────
 
+def extrair_melhor_odd(odds_dict, mercado_ia, odd_min=1.10, odd_max=2.50):
+    """
+    Alias de extrair_odd_para_mercado.
+    Retorna (odd_valor, bookmaker, mercado_usado) para compatibilidade.
+    """
+    odd_val = extrair_odd_para_mercado(odds_dict, mercado_ia, odd_min, odd_max)
+    bookmaker = odds_dict.get("bookmaker", "") if odds_dict else ""
+    return odd_val, bookmaker, mercado_ia
+
+
+# ─────────────────────────────────────────────
+# VERIFICAR COTA RESTANTE
+# ─────────────────────────────────────────────
+
+def verificar_cota_restante(api_key):
+    """Retorna uso da conta OddsPapi."""
+    try:
+        r = requests.get(
+            f"{BASE_URL}/account",
+            params={"apiKey": api_key},
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            usado = data.get("requestsUsed", data.get("used", "?"))
+            total = data.get("requestsLimit", data.get("limit", 250))
+            return {"restantes": total - usado if isinstance(usado, int) else "?", "usadas": usado}
+    except Exception:
+        pass
+    return {"restantes": "?", "usadas": "?"}
+          
