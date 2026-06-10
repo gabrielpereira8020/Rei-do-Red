@@ -239,7 +239,8 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
 # PIPELINE COMPLETO DAS 4 ETAPAS
 # ─────────────────────────────────────────────
 
-def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=20):
+def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=20,
+                                   usar_oddspapi=True, usar_the_odds=True, usar_odds_api=True):
     """
     Executa as 4 etapas e retorna jogos prontos para o bilhete.
     """
@@ -336,11 +337,11 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
     # ──────────────────────────────────────────
     # ETAPA 4 — 3 APIs em cascata: OddsPapi → The Odds API → Odds API
     # ──────────────────────────────────────────
-    oddspapi_key = st.secrets.get("ODDSPAPI_KEY", "")
-    the_odds_key = st.secrets.get("THE_ODDS_API_KEY", "")
-    usar_oddspapi = bool(oddspapi_key)
-    usar_the_odds = bool(the_odds_key)
-
+    oddspapi_key = st.secrets.get("ODDSPAPI_KEY", "") if usar_oddspapi else ""
+    the_odds_key = st.secrets.get("THE_ODDS_API_KEY", "") if usar_the_odds else ""
+    usar_oddspapi = bool(oddspapi_key) and usar_oddspapi
+    usar_the_odds = bool(the_odds_key) and usar_the_odds
+    # usar_odds_api controla o fallback 3 (Odds API original)
     etapa1.info(
         f"💰 **Etapa 4/4** — Buscando odds para {len(jogos_aprovados_ia)} jogos | "
         f"OddsPapi={'✅' if usar_oddspapi else '❌'} | "
