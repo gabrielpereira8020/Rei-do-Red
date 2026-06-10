@@ -239,8 +239,7 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
 # PIPELINE COMPLETO DAS 4 ETAPAS
 # ─────────────────────────────────────────────
 
-def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=20,
-                                   usar_oddspapi=True, usar_the_odds=True, usar_odds_api=True):
+def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=20):
     """
     Executa as 4 etapas e retorna jogos prontos para o bilhete.
     """
@@ -337,11 +336,11 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
     # ──────────────────────────────────────────
     # ETAPA 4 — 3 APIs em cascata: OddsPapi → The Odds API → Odds API
     # ──────────────────────────────────────────
-    oddspapi_key = st.secrets.get("ODDSPAPI_KEY", "") if usar_oddspapi else ""
-    the_odds_key = st.secrets.get("THE_ODDS_API_KEY", "") if usar_the_odds else ""
-    usar_oddspapi = bool(oddspapi_key) and usar_oddspapi
-    usar_the_odds = bool(the_odds_key) and usar_the_odds
-    # usar_odds_api controla o fallback 3 (Odds API original)
+    oddspapi_key = st.secrets.get("ODDSPAPI_KEY", "")
+    the_odds_key = st.secrets.get("THE_ODDS_API_KEY", "")
+    usar_oddspapi = bool(oddspapi_key)
+    usar_the_odds = bool(the_odds_key)
+
     etapa1.info(
         f"💰 **Etapa 4/4** — Buscando odds para {len(jogos_aprovados_ia)} jogos | "
         f"OddsPapi={'✅' if usar_oddspapi else '❌'} | "
@@ -402,7 +401,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
                 log_etapa("  TheOddsAPI erro: " + jogo["nome"] + " — " + str(e)[:60])
 
         # 3. Odds API original — fallback 2
-        if odds_api_key and usar_odds_api and not melhor_odd:
+        if odds_api_key and not melhor_odd:
             try:
                 odds_txt_raw = buscar_odds_evento_por_nome(
                     jogo.get("casa",""), jogo.get("fora",""), odds_api_key
@@ -506,28 +505,28 @@ def _extrair_melhor_odd(odds_txt, odd_min, odd_max):
             except Exception:
                 pass
         if odds_validas:
-            # Prioriza odds dentro da faixa ideal; se não houver, pega a maior disponível
+            # Prioriza odds dentro da faixa ideal; se nÃ£o houver, pega a maior disponÃ­vel
             odds_na_faixa = [v for v in odds_validas if v >= odd_min]
             if odds_na_faixa:
                 centro = (odd_min + odd_max) / 2
                 return min(odds_na_faixa, key=lambda x: abs(x - centro))
-            # Odds abaixo do mínimo — retorna a maior (candidata para combinada)
+            # Odds abaixo do mÃ­nimo â€” retorna a maior (candidata para combinada)
             return max(odds_validas)
     except Exception:
         pass
     return None
 
 
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # TELA PRINCIPAL
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def tela_alavancagem(supabase=None):
     init_estado()
     api_key = st.secrets["API_KEY"]
     odds_api_key = st.secrets.get("ODDS_API_KEY", "")
 
-    tab1, tab2, tab3 = st.tabs(["🚀 Alavancagem", "📊 Painel de Aprendizado", "🔍 Log de Etapas"])
+    tab1, tab2, tab3 = st.tabs(["ðŸš€ Alavancagem", "ðŸ“Š Painel de Aprendizado", "ðŸ” Log de Etapas"])
 
     with tab2:
         if supabase:
@@ -536,21 +535,21 @@ def tela_alavancagem(supabase=None):
             st.info("Conecte o Supabase para ver o painel de aprendizado.")
 
     with tab3:
-        st.markdown("### 🔍 Log de Etapas")
-        # Usa ultimo_log que persiste após rerun; alav_log_etapas é zerado a cada execução
+        st.markdown("### ðŸ” Log de Etapas")
+        # Usa ultimo_log que persiste apÃ³s rerun; alav_log_etapas Ã© zerado a cada execuÃ§Ã£o
         logs = st.session_state.get("alav_ultimo_log") or st.session_state.get("alav_log_etapas", [])
         if logs:
-            st.caption(f"📋 {len(logs)} entradas no log")
+            st.caption(f"ðŸ“‹ {len(logs)} entradas no log")
             for linha in logs:
                 st.caption(linha)
         else:
             st.info("Nenhum log ainda. Inicie uma alavancagem para ver o passo a passo.")
 
     with tab1:
-        st.subheader("🚀 Alavancagem Progressiva")
+        st.subheader("ðŸš€ Alavancagem Progressiva")
         st.markdown(
-            "Nova arquitetura: **API Football → Ranking Stats → IA escolhe mercado → "
-            "Odds API valida → Bilhete final**"
+            "Nova arquitetura: **API Football â†’ Ranking Stats â†’ IA escolhe mercado â†’ "
+            "Odds API valida â†’ Bilhete final**"
         )
 
         if not st.session_state.alav_ativa:
@@ -559,12 +558,12 @@ def tela_alavancagem(supabase=None):
             _tela_execucao(supabase)
 
 
-# ─────────────────────────────────────────────
-# TELA DE CONFIGURAÇÃO
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# TELA DE CONFIGURAÃ‡ÃƒO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _tela_configuracao(api_key, odds_api_key, supabase):
-    st.markdown("### ⚙️ Configurar")
+    st.markdown("### âš™ï¸ Configurar")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -579,21 +578,21 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
 
     col4, col5, col6 = st.columns(3)
     with col4:
-        odd_min = st.slider("Odd mínima", 1.10, 1.80, float(st.session_state.alav_odd_min), 0.05)
+        odd_min = st.slider("Odd mÃ­nima", 1.10, 1.80, float(st.session_state.alav_odd_min), 0.05)
     with col5:
-        odd_max = st.slider("Odd máxima", 1.50, 2.50, float(st.session_state.alav_odd_max), 0.05)
+        odd_max = st.slider("Odd mÃ¡xima", 1.50, 2.50, float(st.session_state.alav_odd_max), 0.05)
     with col6:
-        confianca_min = st.slider("Confiança mínima da IA (0-100)", 30, 95,
+        confianca_min = st.slider("ConfianÃ§a mÃ­nima da IA (0-100)", 30, 95,
                                   int(st.session_state.alav_confianca_min), 5)
         if confianca_min <= 40:
-            st.caption("⚠️ Confiança baixa — mais jogos mas menos seletivo")
+            st.caption("âš ï¸ ConfianÃ§a baixa â€” mais jogos mas menos seletivo")
         elif confianca_min >= 80:
-            st.caption("🎯 Alta seletividade — poucos jogos mas mais seguros")
+            st.caption("ðŸŽ¯ Alta seletividade â€” poucos jogos mas mais seguros")
         else:
             st.caption("Abaixo disso, a IA descarta o jogo")
 
     # Preview
-    st.markdown("### 👁️ Preview")
+    st.markdown("### ðŸ‘ï¸ Preview")
     preview = calcular_tabela(banca, odd, int(total))
     cols = st.columns([1, 2, 2, 2, 2])
     for h, c in zip(["#", "Entrada", "Odd", "Retorno", "Lucro"], cols):
@@ -610,46 +609,28 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
     st.success(f"Acertando tudo: R$ {preview[-1]['retorno']} | Lucro: +R$ {lucro_total}")
 
     st.markdown("---")
-    st.markdown("### 🔌 APIs de Odds ativas")
-    st.caption("Desative para economizar requisições durante testes")
-    col_api1, col_api2, col_api3 = st.columns(3)
-    with col_api1:
-        usar_oddspapi = st.checkbox("OddsPapi", value=True, 
-            help="~250 req/mês — desative para testes")
-    with col_api2:
-        usar_the_odds = st.checkbox("The Odds API", value=True,
-            help="~500 req/mês — desative para testes")
-    with col_api3:
-        usar_odds_api = st.checkbox("Odds API (original)", value=True,
-            help="100 req/hora — mais barata para testes")
-
-    apis_ativas = [n for n, v in [("OddsPapi", usar_oddspapi), ("TheOddsAPI", usar_the_odds), ("OddsAPI", usar_odds_api)] if v]
-    if not apis_ativas:
-        st.error("⚠️ Selecione pelo menos 1 API de odds.")
-    else:
-        st.caption(f"✅ Ativas: {' → '.join(apis_ativas)}")
 
     # Explica o novo fluxo
-    with st.expander("ℹ️ Como funciona o novo pipeline?"):
+    with st.expander("â„¹ï¸ Como funciona o novo pipeline?"):
         st.markdown("""
-**Etapa 1 — API Football** busca jogos de hoje/amanhã e coleta estatísticas reais:
-forma dos últimos 5 jogos, média de gols, aproveitamento em casa/fora, H2H, classificação.
+**Etapa 1 â€” API Football** busca jogos de hoje/amanhÃ£ e coleta estatÃ­sticas reais:
+forma dos Ãºltimos 5 jogos, mÃ©dia de gols, aproveitamento em casa/fora, H2H, classificaÃ§Ã£o.
 
-**Etapa 2 — Ranking por stats** pontua cada jogo de 0 a 100 usando somente dados estatísticos.
-Somente os melhores 20 avançam. *Ainda sem olhar odds.*
+**Etapa 2 â€” Ranking por stats** pontua cada jogo de 0 a 100 usando somente dados estatÃ­sticos.
+Somente os melhores 20 avanÃ§am. *Ainda sem olhar odds.*
 
-**Etapa 3 — IA escolhe o mercado** ideal para cada jogo (Over 1.5, Double Chance, etc.)
-e dá uma confiança de 0-100. Jogos com confiança abaixo do mínimo são descartados.
+**Etapa 3 â€” IA escolhe o mercado** ideal para cada jogo (Over 1.5, Double Chance, etc.)
+e dÃ¡ uma confianÃ§a de 0-100. Jogos com confianÃ§a abaixo do mÃ­nimo sÃ£o descartados.
 
-**Etapa 4 — Odds API** busca odds *apenas* para os jogos aprovados pela IA.
-A odd real é validada contra a faixa configurada.
+**Etapa 4 â€” Odds API** busca odds *apenas* para os jogos aprovados pela IA.
+A odd real Ã© validada contra a faixa configurada.
 
 **Resultado:** bilhete montado com jogos que passaram em todas as etapas.
         """)
 
-    if st.button("🚀 INICIAR PIPELINE — Buscar, analisar e ranquear", use_container_width=True):
+    if st.button("ðŸš€ INICIAR PIPELINE â€” Buscar, analisar e ranquear", use_container_width=True):
         if not odds_api_key:
-            st.error("ODDS_API_KEY não configurada nos Secrets.")
+            st.error("ODDS_API_KEY nÃ£o configurada nos Secrets.")
             return
 
         st.session_state.alav_banca_inicial = banca
@@ -661,16 +642,9 @@ A odd real é validada contra a faixa configurada.
         st.session_state.alav_log_etapas = []
         st.session_state.alav_ultimo_log = []
 
-        if not apis_ativas:
-            st.error("Selecione pelo menos 1 API de odds para continuar.")
-            return
-
         jogos_prontos = executar_pipeline_alavancagem(
             api_key, odds_api_key,
-            odd_min, odd_max, confianca_min,
-            usar_oddspapi=usar_oddspapi,
-            usar_the_odds=usar_the_odds,
-            usar_odds_api=usar_odds_api,
+            odd_min, odd_max, confianca_min
         )
 
         # Preserva o log antes de qualquer rerun
@@ -680,36 +654,36 @@ A odd real é validada contra a faixa configurada.
             # Diagnostica em qual etapa travou com base no log
             log_txt = "\n".join(st.session_state.alav_ultimo_log)
             if "Etapa 3:" not in log_txt:
-                fase = "🔴 **Travou na Etapa 2** — nenhum jogo atingiu score mínimo de stats."
+                fase = "ðŸ”´ **Travou na Etapa 2** â€” nenhum jogo atingiu score mÃ­nimo de stats."
             elif "Etapa 4:" not in log_txt:
-                fase = "🔴 **Travou na Etapa 3** — IA recusou todos os jogos (confiança baixa)."
+                fase = "ðŸ”´ **Travou na Etapa 3** â€” IA recusou todos os jogos (confianÃ§a baixa)."
             elif "Odd aprovada" not in log_txt and "Candidato combinada" not in log_txt:
-                fase = "🔴 **Travou na Etapa 4** — nenhuma odd dentro da faixa configurada ou abaixo do mínimo para combinada."
+                fase = "ðŸ”´ **Travou na Etapa 4** â€” nenhuma odd dentro da faixa configurada ou abaixo do mÃ­nimo para combinada."
             else:
-                fase = "🟡 Jogos chegaram à Etapa 4 mas não formaram bilhete válido."
+                fase = "ðŸŸ¡ Jogos chegaram Ã  Etapa 4 mas nÃ£o formaram bilhete vÃ¡lido."
 
             st.error(
-                f"❌ Nenhuma entrada segura hoje.\n\n"
+                f"âŒ Nenhuma entrada segura hoje.\n\n"
                 f"{fase}\n\n"
-                "Veja o log completo abaixo 👇"
+                "Veja o log completo abaixo ðŸ‘‡"
             )
-            # Mostra o log inline para não precisar trocar de aba
-            with st.expander("🔍 Log completo do pipeline", expanded=True):
+            # Mostra o log inline para nÃ£o precisar trocar de aba
+            with st.expander("ðŸ” Log completo do pipeline", expanded=True):
                 logs = st.session_state.alav_ultimo_log
                 if logs:
                     for linha in logs:
                         st.caption(linha)
                 else:
-                    st.warning("Log vazio — o pipeline pode ter falhado silenciosamente (cheque a chave de API).")
+                    st.warning("Log vazio â€” o pipeline pode ter falhado silenciosamente (cheque a chave de API).")
             return
 
-        st.success(f"✅ {len(jogos_prontos)} jogo(s) aprovados em todas as etapas!")
-        st.markdown("**🏆 Jogos prontos para o bilhete:**")
+        st.success(f"âœ… {len(jogos_prontos)} jogo(s) aprovados em todas as etapas!")
+        st.markdown("**ðŸ† Jogos prontos para o bilhete:**")
         for j in jogos_prontos:
             st.markdown(
                 f"**#{j.get('score', 0)}/100** | {j['nome']} | {j.get('liga_nome', '')} | "
                 f"Mercado: **{j.get('ia_mercado', '')}** | "
-                f"Confiança IA: {j.get('ia_confianca', 0)}/100 | "
+                f"ConfianÃ§a IA: {j.get('ia_confianca', 0)}/100 | "
                 f"Odd: {j.get('melhor_odd', '?')}"
             )
 
@@ -721,9 +695,9 @@ A odd real é validada contra a faixa configurada.
         st.rerun()
 
 
-# ─────────────────────────────────────────────
-# TELA DE EXECUÇÃO
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# TELA DE EXECUÃ‡ÃƒO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _tela_execucao(supabase):
     entradas = st.session_state.alav_entradas
@@ -735,9 +709,9 @@ def _tela_execucao(supabase):
     pendentes = sum(1 for e in entradas if e["status"] is None)
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("✅ Greens", greens)
-    col2.metric("❌ Reds", reds)
-    col3.metric("⏳ Pendentes", pendentes)
+    col1.metric("âœ… Greens", greens)
+    col2.metric("âŒ Reds", reds)
+    col3.metric("â³ Pendentes", pendentes)
 
     banca_atual = st.session_state.alav_banca_inicial
     for e in entradas:
@@ -746,7 +720,7 @@ def _tela_execucao(supabase):
         elif e["status"] is False:
             banca_atual = 0
             break
-    col4.metric("💰 Banca Atual", f"R$ {round(banca_atual, 2)}")
+    col4.metric("ðŸ’° Banca Atual", f"R$ {round(banca_atual, 2)}")
 
     st.markdown("---")
 
@@ -755,7 +729,7 @@ def _tela_execucao(supabase):
         entrada_info = entradas[atual]
 
         if not entrada_info.get("bilhete"):
-            st.info(f"🤖 Montando bilhete para entrada #{atual + 1} com {len(jogos)} jogos disponíveis...")
+            st.info(f"ðŸ¤– Montando bilhete para entrada #{atual + 1} com {len(jogos)} jogos disponÃ­veis...")
             with st.spinner("IA analisando e escolhendo a melhor aposta..."):
                 historico = [e for e in entradas if e["status"] is not None]
                 try:
@@ -774,11 +748,11 @@ def _tela_execucao(supabase):
                     return
 
             # Mostra resultado bruto para debug
-            with st.expander("🔬 Resposta bruta da IA", expanded=False):
+            with st.expander("ðŸ”¬ Resposta bruta da IA", expanded=False):
                 st.json(resultado)
 
             if resultado.get("sem_entrada"):
-                st.warning("**IA não encontrou entrada segura neste momento**")
+                st.warning("**IA nÃ£o encontrou entrada segura neste momento**")
                 motivo = resultado.get("motivo_recusa") or resultado.get("motivo", "sem motivo")
                 st.info(f"Motivo: {motivo}")
                 c1, c2 = st.columns(2)
@@ -808,15 +782,15 @@ def _tela_execucao(supabase):
         cor   = "#22c55e" if conf >= 80 else "#f59e0b" if conf >= 65 else "#ef4444"
 
         st.markdown(
-            f"#### Entrada #{entrada_info['entrada']} — "
+            f"#### Entrada #{entrada_info['entrada']} â€” "
             f"{'Combinada 2 jogos' if tipo == 'combinada' else 'Simples'}"
         )
         st.markdown(
             f"**R$ {entrada_info['valor']}** @ **{entrada_info['odd']}x** "
-            f"→ **R$ {entrada_info['retorno']}**"
+            f"â†’ **R$ {entrada_info['retorno']}**"
         )
         st.markdown(
-            f"<span style='color:{cor};font-weight:700'>Score de confiança: {conf}/100</span>",
+            f"<span style='color:{cor};font-weight:700'>Score de confianÃ§a: {conf}/100</span>",
             unsafe_allow_html=True
         )
 
@@ -829,7 +803,7 @@ def _tela_execucao(supabase):
 
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("✅ GREEN - Acertei!", key=f"green_{atual}", use_container_width=True):
+            if st.button("âœ… GREEN - Acertei!", key=f"green_{atual}", use_container_width=True):
                 st.session_state.alav_entradas[atual]["status"] = True
                 st.session_state.alav_entradas[atual]["data"]   = datetime.now().strftime("%d/%m %H:%M")
                 st.session_state.alav_entrada_atual = atual + 1
@@ -848,7 +822,7 @@ def _tela_execucao(supabase):
                         })
                 st.rerun()
         with c2:
-            if st.button("❌ RED - Errei", key=f"red_{atual}", use_container_width=True):
+            if st.button("âŒ RED - Errei", key=f"red_{atual}", use_container_width=True):
                 st.session_state.alav_entradas[atual]["status"] = False
                 st.session_state.alav_entradas[atual]["data"]   = datetime.now().strftime("%d/%m %H:%M")
                 st.session_state.alav_entrada_atual = len(entradas)
@@ -867,30 +841,30 @@ def _tela_execucao(supabase):
                         })
                 st.rerun()
 
-    # Histórico
+    # HistÃ³rico
     st.markdown("---")
-    st.markdown("### 📋 Histórico desta alavancagem")
+    st.markdown("### ðŸ“‹ HistÃ³rico desta alavancagem")
     for entrada in entradas:
         if entrada["status"] is None:
             continue
-        linha = f"#{entrada['entrada']} | R$ {entrada['valor']} → R$ {entrada['retorno']}"
+        linha = f"#{entrada['entrada']} | R$ {entrada['valor']} â†’ R$ {entrada['retorno']}"
         for b in entrada.get("bilhete", []):
-            linha += f" | {b.get('jogo', '')} — {b.get('mercado', '')}"
+            linha += f" | {b.get('jogo', '')} â€” {b.get('mercado', '')}"
         if entrada["status"] is True:
             st.success(linha)
         else:
             st.error(linha)
 
-    # Finalização
+    # FinalizaÃ§Ã£o
     if atual >= len(entradas):
         if all(e["status"] is True for e in entradas):
             retorno_final = entradas[-1]["retorno"]
             lucro = round(retorno_final - st.session_state.alav_banca_inicial, 2)
-            st.success(f"🏆 COMPLETO! R$ {retorno_final} | Lucro: +R$ {lucro}")
+            st.success(f"ðŸ† COMPLETO! R$ {retorno_final} | Lucro: +R$ {lucro}")
         else:
-            st.error("❌ Alavancagem encerrada com RED. Recomece com a banca inicial.")
+            st.error("âŒ Alavancagem encerrada com RED. Recomece com a banca inicial.")
 
-    if st.button("🔄 Nova Alavancagem", use_container_width=True):
+    if st.button("ðŸ”„ Nova Alavancagem", use_container_width=True):
         _resetar_alavancagem()
         st.rerun()
 
