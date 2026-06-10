@@ -379,52 +379,6 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
                         fonte_odd  = "OddsPapi(" + str(bm) + ")"
                         jogo["odds_txt"]  = oddspapi_montar_txt(odds_dict, mercado_ia)
                         jogo["odds_dict"] = odds_dict
-# ──────────────────────────────────────────
-    # ETAPA 4 — 3 APIs em cascata: OddsPapi → The Odds API → Odds API
-    # ──────────────────────────────────────────
-    oddspapi_key = st.secrets.get("ODDSPAPI_KEY", "")
-    the_odds_key = st.secrets.get("THE_ODDS_API_KEY", "")
-    usar_oddspapi = bool(oddspapi_key)
-    usar_the_odds = bool(the_odds_key)
-
-    etapa1.info(
-        f"💰 **Etapa 4/4** — Buscando odds para {len(jogos_aprovados_ia)} jogos | "
-        f"OddsPapi={'✅' if usar_oddspapi else '❌'} | "
-        f"TheOddsAPI={'✅' if usar_the_odds else '❌'}"
-    )
-    log_etapa(
-        f"Etapa 4: {len(jogos_aprovados_ia)} jogos | "
-        f"OddsPapi={'ativa' if usar_oddspapi else 'inativa'} | "
-        f"TheOddsAPI={'ativa' if usar_the_odds else 'inativa'}"
-    )
-
-    jogos_com_odds = []
-    prog4 = st.progress(0)
-
-    for i, jogo in enumerate(jogos_aprovados_ia):
-        prog4.progress((i + 1) / max(len(jogos_aprovados_ia), 1))
-
-        melhor_odd = None
-        fonte_odd  = ""
-        mercado_ia = jogo.get("ia_mercado", "")
-        liga_id    = jogo.get("liga_id", 0)
-        liga_nome  = jogo.get("liga_nome", "")
-
-        # 1. OddsPapi — principal (Pinnacle, 460+ mercados)
-        if usar_oddspapi and not melhor_odd:
-            try:
-                odds_dict = oddspapi_buscar(
-                    jogo.get("casa",""), jogo.get("fora",""),
-                    liga_id, liga_nome, oddspapi_key,
-                    odd_min=1.10, odd_max=odd_max
-                )
-                if odds_dict:
-                    odd_val, bm, _ = oddspapi_extrair_odd(odds_dict, mercado_ia, 1.10, odd_max)
-                    if odd_val:
-                        melhor_odd = odd_val
-                        fonte_odd  = "OddsPapi(" + str(bm) + ")"
-                        jogo["odds_txt"]  = oddspapi_montar_txt(odds_dict, mercado_ia)
-                        jogo["odds_dict"] = odds_dict
             except Exception as e:
                 log_etapa("  OddsPapi erro: " + jogo["nome"] + " — " + str(e)[:60])
 
@@ -740,6 +694,7 @@ A odd real é validada contra a faixa configurada.
         st.session_state.alav_entrada_atual = 0
         st.rerun()
 
+
 # ─────────────────────────────────────────────
 # TELA DE EXECUÇÃO
 # ─────────────────────────────────────────────
@@ -917,3 +872,4 @@ def _tela_execucao(supabase):
 def _resetar_alavancagem():
     for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
         st.session_state.pop(k, None)
+  
