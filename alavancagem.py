@@ -428,8 +428,10 @@ def tela_alavancagem(supabase=None):
 
     with tab3:
         st.markdown("### 🔍 Log de Etapas")
-        logs = st.session_state.get("alav_log_etapas", [])
+        # Usa ultimo_log que persiste após rerun; alav_log_etapas é zerado a cada execução
+        logs = st.session_state.get("alav_ultimo_log") or st.session_state.get("alav_log_etapas", [])
         if logs:
+            st.caption(f"📋 {len(logs)} entradas no log")
             for linha in logs:
                 st.caption(linha)
         else:
@@ -530,17 +532,41 @@ A odd real é validada contra a faixa configurada.
         st.session_state.alav_odd_max = odd_max
         st.session_state.alav_confianca_min = confianca_min
         st.session_state.alav_log_etapas = []
+        st.session_state.alav_ultimo_log = []
 
         jogos_prontos = executar_pipeline_alavancagem(
             api_key, odds_api_key,
             odd_min, odd_max, confianca_min
         )
 
+        # Preserva o log antes de qualquer rerun
+        st.session_state.alav_ultimo_log = list(st.session_state.get("alav_log_etapas", []))
+
         if not jogos_prontos:
+            # Diagnostica em qual etapa travou com base no log
+            log_txt = "\n".join(st.session_state.alav_ultimo_log)
+            if "Etapa 3:" not in log_txt:
+                fase = "🔴 **Travou na Etapa 2** — nenhum jogo atingiu score mínimo de stats."
+            elif "Etapa 4:" not in log_txt:
+                fase = "🔴 **Travou na Etapa 3** — IA recusou todos os jogos (confiança baixa)."
+            elif "Odd aprovada" not in log_txt and "Candidato combinada" not in log_txt:
+                fase = "🔴 **Travou na Etapa 4** — nenhuma odd dentro da faixa configurada ou abaixo do mínimo para combinada."
+            else:
+                fase = "🟡 Jogos chegaram à Etapa 4 mas não formaram bilhete válido."
+
             st.error(
-                "❌ Nenhum jogo passou por todas as etapas do pipeline.\n\n"
-                "Verifique a aba **Log de Etapas** para entender onde os jogos foram bloqueados."
+                f"❌ Nenhuma entrada segura hoje.\n\n"
+                f"{fase}\n\n"
+                "Veja o log completo abaixo 👇"
             )
+            # Mostra o log inline para não precisar trocar de aba
+            with st.expander("🔍 Log completo do pipeline", expanded=True):
+                logs = st.session_state.alav_ultimo_log
+                if logs:
+                    for linha in logs:
+                        st.caption(linha)
+                else:
+                    st.warning("Log vazio — o pipeline pode ter falhado silenciosamente (cheque a chave de API).")
             return
 
         st.success(f"✅ {len(jogos_prontos)} jogo(s) aprovados em todas as etapas!")
@@ -737,6 +763,4 @@ def _tela_execucao(supabase):
 
 def _resetar_alavancagem():
     for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
-        st.session_state.pop(k, None)
-
-                
+        st.session_state.pop(k, None) 
