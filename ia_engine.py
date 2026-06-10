@@ -29,7 +29,7 @@ Responda EXATAMENTE neste formato:
 (aposta mais segura baseada nos dados reais)
 
 📊 CONFIANÇA:
-(apenas número de 0 a 10)
+(apenas número de 0 a 100)
 
 💎 OPORTUNIDADE DE OURO:
 (aposta de valor com base nos dados)
