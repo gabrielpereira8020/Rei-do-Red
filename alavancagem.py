@@ -322,17 +322,30 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
     for i, jogo in enumerate(jogos_aprovados_ia):
         prog4.progress((i + 1) / max(len(jogos_aprovados_ia), 1))
 
-        odds_txt = buscar_odds_evento_por_nome(
+        # Usa The Odds API (the-odds-api.com) com mapeamento por liga_id — mais confiável
+        liga_id = jogo.get("liga_id", 0)
+        odds_dict = the_odds_buscar(
             jogo.get("casa", ""),
             jogo.get("fora", ""),
-            odds_api_key
+            liga_id,
+            odds_api_key,
+            odd_min=1.10,
+            odd_max=odd_max
         )
 
+        if not odds_dict:
+            log_etapa(f"  ⚠️ Sem odds: {jogo['nome']} (nao encontrado na Odds API — liga_id={liga_id})")
+            continue
+
+        # Converte o dict de odds para texto formatado que o resto do pipeline espera
+        from the_odds_api import montar_texto_odds
+        odds_txt = montar_texto_odds(odds_dict, jogo.get("ia_mercado", ""))
         if not odds_txt:
-            log_etapa(f"  ⚠️ Sem odds: {jogo['nome']} (nao encontrado na Odds API)")
+            log_etapa(f"  ⚠️ Sem odds formatadas: {jogo['nome']}")
             continue
 
         jogo["odds_txt"] = odds_txt
+        jogo["odds_dict"] = odds_dict
         jogo["tem_odds"] = True
 
         # Tenta extrair a melhor odd disponível (aceita abaixo do mínimo para combinadas)
@@ -763,4 +776,4 @@ def _tela_execucao(supabase):
 
 def _resetar_alavancagem():
     for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
-        st.session_state.pop(k, None) 
+        st.session_state.pop(k, None)
