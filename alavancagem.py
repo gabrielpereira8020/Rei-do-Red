@@ -402,7 +402,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
                 log_etapa("  TheOddsAPI erro: " + jogo["nome"] + " — " + str(e)[:60])
 
         # 3. Odds API original — fallback 2
-        if odds_api_key and not melhor_odd:
+        if odds_api_key and usar_odds_api and not melhor_odd:
             try:
                 odds_txt_raw = buscar_odds_evento_por_nome(
                     jogo.get("casa",""), jogo.get("fora",""), odds_api_key
@@ -610,6 +610,24 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
     st.success(f"Acertando tudo: R$ {preview[-1]['retorno']} | Lucro: +R$ {lucro_total}")
 
     st.markdown("---")
+    st.markdown("### 🔌 APIs de Odds ativas")
+    st.caption("Desative para economizar requisições durante testes")
+    col_api1, col_api2, col_api3 = st.columns(3)
+    with col_api1:
+        usar_oddspapi = st.checkbox("OddsPapi", value=True, 
+            help="~250 req/mês — desative para testes")
+    with col_api2:
+        usar_the_odds = st.checkbox("The Odds API", value=True,
+            help="~500 req/mês — desative para testes")
+    with col_api3:
+        usar_odds_api = st.checkbox("Odds API (original)", value=True,
+            help="100 req/hora — mais barata para testes")
+
+    apis_ativas = [n for n, v in [("OddsPapi", usar_oddspapi), ("TheOddsAPI", usar_the_odds), ("OddsAPI", usar_odds_api)] if v]
+    if not apis_ativas:
+        st.error("⚠️ Selecione pelo menos 1 API de odds.")
+    else:
+        st.caption(f"✅ Ativas: {' → '.join(apis_ativas)}")
 
     # Explica o novo fluxo
     with st.expander("ℹ️ Como funciona o novo pipeline?"):
@@ -643,9 +661,16 @@ A odd real é validada contra a faixa configurada.
         st.session_state.alav_log_etapas = []
         st.session_state.alav_ultimo_log = []
 
+        if not apis_ativas:
+            st.error("Selecione pelo menos 1 API de odds para continuar.")
+            return
+
         jogos_prontos = executar_pipeline_alavancagem(
             api_key, odds_api_key,
-            odd_min, odd_max, confianca_min
+            odd_min, odd_max, confianca_min,
+            usar_oddspapi=usar_oddspapi,
+            usar_the_odds=usar_the_odds,
+            usar_odds_api=usar_odds_api,
         )
 
         # Preserva o log antes de qualquer rerun
