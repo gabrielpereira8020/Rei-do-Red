@@ -33,6 +33,11 @@ from the_odds_api import (
     montar_texto_odds,
     verificar_cota_restante,
 )
+from oddspapi_engine import (
+    buscar_odds_jogo as oddspapi_buscar,
+    extrair_melhor_odd as oddspapi_extrair_odd,
+    montar_texto_odds as oddspapi_montar_txt,
+)
 from stats_engine_alav import init as stats_init, buscar_jogos_futuros_api_football, enriquecer_stats_jogo
 from ranking_engine_alav import ranquear_jogos_por_stats, filtrar_top_para_ia, validar_odd_para_entrada
 from historico_engine_alav import salvar_entrada, exibir_painel_aprendizado
@@ -186,12 +191,10 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
         + "INSTRUÇÕES:\n"
         "1. Use SOMENTE os jogos listados acima — todos têm odds confirmadas\n"
         "2. Use as odds EXATAS da lista — NUNCA invente valores\n"
-        "3. Simples = 1 jogo com odd já na faixa. Combinada = 2 jogos (MULTIPLICAR as odds: ex 1.18 x 1.28 = 1.51)\n"
+        "3. Simples = 1 jogo. Combinada = 2 jogos de ligas DIFERENTES\n"
         f"4. Odd final DEVE estar entre {odd_min}x e {odd_max}x\n"
-        "5. REGRA PRINCIPAL: Se não encontrar 1 jogo com odd na faixa, TENTE COMBINAR 2 jogos com odds menores que se multiplicados atingem a faixa\n"
-        "   Exemplo: jogo A @ 1.18 + jogo B @ 1.30 = odd combinada 1.18 * 1.30 = 1.534 (dentro da faixa 1.30-2.00) ✅\n"
-        "6. Para combinada, prefira jogos de ligas DIFERENTES com alta confiança\n"
-        "7. Se mesmo combinando não atingir a faixa, retorne sem_entrada=true\n\n"
+        "5. Priorize jogos com maior confiança IA\n"
+        "6. Se nenhum bilhete atingir a faixa de odd, retorne sem_entrada=true\n\n"
         "Responda SOMENTE JSON sem markdown:\n"
         "{\"sem_entrada\": false, \"tipo\": \"simples\", \"odd_total\": 1.45, "
         "\"confianca\": 85, \"motivo_recusa\": \"\", "
@@ -310,56 +313,77 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
         return []
 
     # ──────────────────────────────────────────
-    # ETAPA 4 — Odds API apenas para jogos aprovados
-    # ──────────────────────────────────────────
-    etapa1.info(
-        f"💰 **Etapa 4/4** — Buscando odds APENAS para os {len(jogos_aprovados_ia)} jogos aprovados..."
+    # ETAPA 4 — Busca odds: OddsPapi → The Odds API → Odds API original
+    # ------------------------------------------
+    oddspapi_key  = st.secrets.get("ODDSPAPI_KEY", "")
+    the_odds_key  = st.secrets.get("THE_ODDS_API_KEY", "")
+    usar_oddspapi = bool(oddspapi_key)
+    usar_the_odds = bool(the_odds_key)
+
+    etapa1.info(f"💰 **Etapa 4/4** — Buscando odds para {len(jogos_aprovados_ia)} jogos aprovados... (OddsPapi={'ativa' if usar_oddspapi else 'inativa'})")
+    log_etapa(
+        f"Etapa 4: {len(jogos_aprovados_ia)} jogos | "
+        f"OddsPapi={'ativa' if usar_oddspapi else 'inativa'} | "
+        f"The Odds API={'ativa' if usar_the_odds else 'inativa'}"
     )
-    log_etapa(f"Etapa 4: buscando odds para {len(jogos_aprovados_ia)} jogos")
 
     jogos_com_odds = []
     prog4 = st.progress(0)
+
     for i, jogo in enumerate(jogos_aprovados_ia):
         prog4.progress((i + 1) / max(len(jogos_aprovados_ia), 1))
 
-        # Usa The Odds API (the-odds-api.com) com mapeamento por liga_id — mais confiável
-        liga_id = jogo.get("liga_id", 0)
-        odds_dict = the_odds_buscar(
-            jogo.get("casa", ""),
-            jogo.get("fora", ""),
-            liga_id,
-            odds_api_key,
-            odd_min=1.10,
-            odd_max=odd_max
-        )
+        melhor_odd = None
+        fonte_odd  = ""
+        mercado_ia = jogo.get("ia_mercado", "")
+        liga_id    = jogo.get("liga_id", 0)
 
-        if not odds_dict:
-            log_etapa(f"  ⚠️ Sem odds: {jogo['nome']} (nao encontrado na Odds API — liga_id={liga_id})")
-            continue
+        # 1. OddsPapi — principal (350+ bookmakers, 460+ mercados)
+        if usar_oddspapi:
+            odds_dict = oddspapi_buscar(
+                jogo.get("casa", ""), jogo.get("fora", ""),
+                liga_id, oddspapi_key, odd_min=1.10, odd_max=odd_max
+            )
+            if odds_dict:
+                odd_val, bm, _ = oddspapi_extrair_odd(odds_dict, mercado_ia, 1.10, odd_max)
+                if odd_val:
+                    melhor_odd = odd_val
+                    fonte_odd  = "OddsPapi (" + str(bm) + ")"
+                    jogo["odds_txt"] = oddspapi_montar_txt(odds_dict)
 
-        # Converte o dict de odds para texto formatado que o resto do pipeline espera
-        from the_odds_api import montar_texto_odds
-        odds_txt = montar_texto_odds(odds_dict, jogo.get("ia_mercado", ""))
-        if not odds_txt:
-            log_etapa(f"  ⚠️ Sem odds formatadas: {jogo['nome']}")
-            continue
+        # 2. The Odds API — fallback 1
+        if not melhor_odd and usar_the_odds:
+            odds_dict = the_odds_buscar(
+                jogo.get("casa", ""), jogo.get("fora", ""),
+                liga_id, the_odds_key, odd_min=1.10, odd_max=odd_max
+            )
+            if odds_dict:
+                odd_val, bm = extrair_melhor_odd_mercado(odds_dict, mercado_ia, 1.10, odd_max)
+                if odd_val:
+                    melhor_odd = odd_val
+                    fonte_odd  = "The Odds API (" + str(bm) + ")"
+                    jogo["odds_txt"] = montar_texto_odds(odds_dict, mercado_ia)
 
-        jogo["odds_txt"] = odds_txt
-        jogo["odds_dict"] = odds_dict
-        jogo["tem_odds"] = True
-
-        # Tenta extrair a melhor odd disponível (aceita abaixo do mínimo para combinadas)
-        melhor_odd = _extrair_melhor_odd(odds_txt, odd_min, odd_max)
+        # 3. Odds API original — fallback 2
+        if not melhor_odd:
+            odds_txt_raw = buscar_odds_evento_por_nome(
+                jogo.get("casa", ""), jogo.get("fora", ""), odds_api_key
+            )
+            if odds_txt_raw:
+                odd_val = _extrair_melhor_odd(odds_txt_raw, 1.10, odd_max)
+                if odd_val:
+                    melhor_odd = odd_val
+                    fonte_odd  = "Odds API"
+                    jogo["odds_txt"] = odds_txt_raw
 
         if not melhor_odd:
-            import re as _re
-            todas = _re.findall(r"@([\d.]+)", odds_txt)
-            log_etapa(f"  ⚠️ {jogo['nome']}: odds disponiveis {todas} — nenhuma aproveitável")
+            log_etapa("  sem odds em nenhuma API: " + jogo["nome"])
             continue
 
         jogo["melhor_odd"] = melhor_odd
+        jogo["tem_odds"]   = True
 
-        # Jogo com odd já na faixa ideal → aprovado diretamente
+        # Odd na faixa ideal — entra como simples
         if melhor_odd >= odd_min:
             aprovado, motivo_odd = validar_odd_para_entrada(
                 melhor_odd, odd_min, odd_max, jogo["ia_confianca"]
@@ -367,23 +391,21 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
             if aprovado:
                 jogo["candidato_combinada"] = False
                 jogos_com_odds.append(jogo)
-                log_etapa(f"  ✅ Odd aprovada (simples): {jogo['nome']} @ {melhor_odd} ({jogo['ia_mercado']})")
+                log_etapa("  OK simples: " + jogo["nome"] + " @ " + str(melhor_odd) + " via " + fonte_odd)
             else:
-                log_etapa(f"  ❌ Odd recusada: {jogo['nome']} @ {melhor_odd} — {motivo_odd}")
+                log_etapa("  recusada: " + jogo["nome"] + " @ " + str(melhor_odd) + " — " + motivo_odd)
         else:
-            # Odd abaixo do mínimo mas com confiança alta → candidato para combinada
+            # Odd baixa mas confianca alta — candidato para combinada
             if jogo["ia_confianca"] >= confianca_min:
                 jogo["candidato_combinada"] = True
                 jogos_com_odds.append(jogo)
-                log_etapa(
-                    f"  🔗 Candidato combinada: {jogo['nome']} @ {melhor_odd} "
-                    f"(confiança {jogo['ia_confianca']}) — pode ser combinado para atingir odd alvo"
-                )
+                log_etapa("  combinada: " + jogo["nome"] + " @ " + str(melhor_odd) + " via " + fonte_odd)
             else:
-                log_etapa(f"  ❌ Descartado: {jogo['nome']} @ {melhor_odd} — odd baixa e confiança insuficiente")
+                log_etapa("  descartado: " + jogo["nome"] + " @ " + str(melhor_odd) + " — odd baixa")
 
     prog4.empty()
     etapa1.empty()
+
 
     log_etapa(f"Pipeline concluido: {len(jogos_com_odds)} jogos prontos para o bilhete")
     # Salva log no session_state para exibir na tela principal
@@ -392,31 +414,21 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
 
 
 def _extrair_melhor_odd(odds_txt, odd_min, odd_max):
-    """
-    Extrai a melhor odd do texto de odds.
-    Aceita odds entre ODD_COMBINADA_MIN e odd_max para que jogos
-    com odds baixas possam ser combinados e atingir a faixa alvo.
-    """
+    """Extrai a melhor odd dentro da faixa do texto de odds."""
     import re
-    ODD_COMBINADA_MIN = 1.10  # aceita odds baixas para montar combinadas
     try:
         matches = re.findall(r'@([\d.]+)', odds_txt)
-        odds_validas = []
+        odds_na_faixa = []
         for m in matches:
             try:
                 v = float(m)
-                if ODD_COMBINADA_MIN <= v <= odd_max:
-                    odds_validas.append(v)
+                if odd_min <= v <= odd_max:
+                    odds_na_faixa.append(v)
             except Exception:
                 pass
-        if odds_validas:
-            # Prioriza odds dentro da faixa ideal; se não houver, pega a maior disponível
-            odds_na_faixa = [v for v in odds_validas if v >= odd_min]
-            if odds_na_faixa:
-                centro = (odd_min + odd_max) / 2
-                return min(odds_na_faixa, key=lambda x: abs(x - centro))
-            # Odds abaixo do mínimo — retorna a maior (candidata para combinada)
-            return max(odds_validas)
+        if odds_na_faixa:
+            centro = (odd_min + odd_max) / 2
+            return min(odds_na_faixa, key=lambda x: abs(x - centro))
     except Exception:
         pass
     return None
@@ -441,10 +453,8 @@ def tela_alavancagem(supabase=None):
 
     with tab3:
         st.markdown("### 🔍 Log de Etapas")
-        # Usa ultimo_log que persiste após rerun; alav_log_etapas é zerado a cada execução
-        logs = st.session_state.get("alav_ultimo_log") or st.session_state.get("alav_log_etapas", [])
+        logs = st.session_state.get("alav_log_etapas", [])
         if logs:
-            st.caption(f"📋 {len(logs)} entradas no log")
             for linha in logs:
                 st.caption(linha)
         else:
@@ -545,41 +555,17 @@ A odd real é validada contra a faixa configurada.
         st.session_state.alav_odd_max = odd_max
         st.session_state.alav_confianca_min = confianca_min
         st.session_state.alav_log_etapas = []
-        st.session_state.alav_ultimo_log = []
 
         jogos_prontos = executar_pipeline_alavancagem(
             api_key, odds_api_key,
             odd_min, odd_max, confianca_min
         )
 
-        # Preserva o log antes de qualquer rerun
-        st.session_state.alav_ultimo_log = list(st.session_state.get("alav_log_etapas", []))
-
         if not jogos_prontos:
-            # Diagnostica em qual etapa travou com base no log
-            log_txt = "\n".join(st.session_state.alav_ultimo_log)
-            if "Etapa 3:" not in log_txt:
-                fase = "🔴 **Travou na Etapa 2** — nenhum jogo atingiu score mínimo de stats."
-            elif "Etapa 4:" not in log_txt:
-                fase = "🔴 **Travou na Etapa 3** — IA recusou todos os jogos (confiança baixa)."
-            elif "Odd aprovada" not in log_txt and "Candidato combinada" not in log_txt:
-                fase = "🔴 **Travou na Etapa 4** — nenhuma odd dentro da faixa configurada ou abaixo do mínimo para combinada."
-            else:
-                fase = "🟡 Jogos chegaram à Etapa 4 mas não formaram bilhete válido."
-
             st.error(
-                f"❌ Nenhuma entrada segura hoje.\n\n"
-                f"{fase}\n\n"
-                "Veja o log completo abaixo 👇"
+                "❌ Nenhum jogo passou por todas as etapas do pipeline.\n\n"
+                "Verifique a aba **Log de Etapas** para entender onde os jogos foram bloqueados."
             )
-            # Mostra o log inline para não precisar trocar de aba
-            with st.expander("🔍 Log completo do pipeline", expanded=True):
-                logs = st.session_state.alav_ultimo_log
-                if logs:
-                    for linha in logs:
-                        st.caption(linha)
-                else:
-                    st.warning("Log vazio — o pipeline pode ter falhado silenciosamente (cheque a chave de API).")
             return
 
         st.success(f"✅ {len(jogos_prontos)} jogo(s) aprovados em todas as etapas!")
