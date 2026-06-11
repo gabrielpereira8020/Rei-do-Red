@@ -239,7 +239,7 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
 # PIPELINE COMPLETO DAS 4 ETAPAS
 # ─────────────────────────────────────────────
 
-def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=20):
+def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confianca_min, score_minimo_stats=20, usar_oddspapi=True, usar_the_odds=True, usar_odds_api=True):
     """
     Executa as 4 etapas e retorna jogos prontos para o bilhete.
     """
@@ -336,8 +336,10 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
     # ──────────────────────────────────────────
     # ETAPA 4 — 3 APIs em cascata: OddsPapi → The Odds API → Odds API
     # ──────────────────────────────────────────
-    oddspapi_key = st.secrets.get("ODDSPAPI_KEY", "")
-    the_odds_key = st.secrets.get("THE_ODDS_API_KEY", "")
+    oddspapi_key = st.secrets.get("ODDSPAPI_KEY", "") if usar_oddspapi else ""
+    the_odds_key = st.secrets.get("THE_ODDS_API_KEY", "") if usar_the_odds else ""
+    if not usar_odds_api:
+        odds_api_key = ""  # ignora a Odds API se desativada pelo usuário
     usar_oddspapi = bool(oddspapi_key)
     usar_the_odds = bool(the_odds_key)
 
@@ -628,9 +630,40 @@ A odd real é validada contra a faixa configurada.
 **Resultado:** bilhete montado com jogos que passaram em todas as etapas.
         """)
 
+    # ── Seleção de APIs ────────────────────────────────────────────────────
+    st.markdown("### 🔌 APIs de Odds")
+    st.caption("Selecione quais APIs usar. Desative as de cota limitada para testes.")
+
+    col_api1, col_api2, col_api3 = st.columns(3)
+    with col_api1:
+        usar_oddspapi_ui = st.checkbox(
+            "OddsPapi",
+            value=st.session_state.get("alav_usar_oddspapi", True),
+            help="250 requests/mês | Pinnacle | 460+ mercados"
+        )
+        st.caption("250 req/mês · Pinnacle")
+    with col_api2:
+        usar_the_odds_ui = st.checkbox(
+            "The Odds API",
+            value=st.session_state.get("alav_usar_the_odds", True),
+            help="500 créditos/mês | Bet365, Unibet"
+        )
+        st.caption("500 req/mês · Bet365")
+    with col_api3:
+        usar_odds_api_ui = st.checkbox(
+            "Odds API (odds-api.io)",
+            value=st.session_state.get("alav_usar_odds_api", True),
+            help="100 requests/hora | Unibet | Boa para testes"
+        )
+        st.caption("100 req/hora · Testes ✅")
+
+    if not usar_oddspapi_ui and not usar_the_odds_ui and not usar_odds_api_ui:
+        st.warning("⚠️ Selecione pelo menos uma API de odds.")
+    # ───────────────────────────────────────────────────────────────────────
+
     if st.button("🚀 INICIAR PIPELINE — Buscar, analisar e ranquear", use_container_width=True):
-        if not odds_api_key:
-            st.error("ODDS_API_KEY não configurada nos Secrets.")
+        if not usar_oddspapi_ui and not usar_the_odds_ui and not usar_odds_api_ui:
+            st.error("Selecione pelo menos uma API de odds antes de iniciar.")
             return
 
         st.session_state.alav_banca_inicial = banca
@@ -639,12 +672,18 @@ A odd real é validada contra a faixa configurada.
         st.session_state.alav_odd_min = odd_min
         st.session_state.alav_odd_max = odd_max
         st.session_state.alav_confianca_min = confianca_min
+        st.session_state.alav_usar_oddspapi = usar_oddspapi_ui
+        st.session_state.alav_usar_the_odds = usar_the_odds_ui
+        st.session_state.alav_usar_odds_api = usar_odds_api_ui
         st.session_state.alav_log_etapas = []
         st.session_state.alav_ultimo_log = []
 
         jogos_prontos = executar_pipeline_alavancagem(
             api_key, odds_api_key,
-            odd_min, odd_max, confianca_min
+            odd_min, odd_max, confianca_min,
+            usar_oddspapi=usar_oddspapi_ui,
+            usar_the_odds=usar_the_odds_ui,
+            usar_odds_api=usar_odds_api_ui,
         )
 
         # Preserva o log antes de qualquer rerun
@@ -872,4 +911,4 @@ def _tela_execucao(supabase):
 def _resetar_alavancagem():
     for k in ["alav_ativa", "alav_entradas", "alav_entrada_atual", "alav_jogos", "alav_log_etapas"]:
         st.session_state.pop(k, None)
-  
+      
