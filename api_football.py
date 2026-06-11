@@ -262,32 +262,162 @@ def buscar_contexto_completo(jogo):
 
 
 # =====================================================
-# CONTEXTO AO VIVO COM JOGADORES
+# BUSCAR EVENTOS DO JOGO AO VIVO
+# =====================================================
+def buscar_eventos_ao_vivo(fixture_id):
+    """
+    Busca eventos do jogo: gols, cartões, substituições com minuto exato.
+    """
+    try:
+        data = _get(f"fixtures/events?fixture={fixture_id}")
+        eventos = []
+        for ev in data:
+            tipo      = ev.get("type", "")
+            detalhe   = ev.get("detail", "")
+            minuto    = ev.get("time", {}).get("elapsed", "?")
+            extra     = ev.get("time", {}).get("extra", None)
+            time_nome = ev.get("team", {}).get("name", "?")
+            jogador   = ev.get("player", {}).get("name", "?")
+            assist    = ev.get("assist", {}).get("name", "")
+
+            min_str = f"{minuto}" + (f"+{extra}" if extra else "") + "'"
+
+            if tipo == "Goal":
+                linha = f"  ⚽ {min_str} | {time_nome} | {jogador}"
+                if assist:
+                    linha += f" (assist: {assist})"
+                if detalhe in ["Own Goal"]:
+                    linha += " (GOL CONTRA)"
+                elif detalhe == "Penalty":
+                    linha += " (PÊNALTI)"
+                eventos.append(linha)
+            elif tipo == "Card":
+                emoji = "🟨" if detalhe == "Yellow Card" else "🟥"
+                eventos.append(f"  {emoji} {min_str} | {time_nome} | {jogador}")
+            elif tipo == "subst":
+                eventos.append(f"  🔄 {min_str} | {time_nome} | ↑{jogador} ↓{assist}")
+
+        return eventos
+    except Exception:
+        return []
+
+
+# =====================================================
+# BUSCAR ODDS AO VIVO
+# =====================================================
+def buscar_odds_ao_vivo(fixture_id):
+    """
+    Busca odds ao vivo do fixture se disponível.
+    """
+    try:
+        data = _get(f"odds/live?fixture={fixture_id}")
+        if not data:
+            return ""
+        linhas = ["📊 ODDS AO VIVO:"]
+        for item in data[:1]:  # Primeiro bookmaker
+            bk = item.get("bookmaker", {}).get("name", "?")
+            for bet in item.get("bets", [])[:3]:  # Primeiros 3 mercados
+                nome_mercado = bet.get("name", "")
+                valores = bet.get("values", [])
+                odds_str = " | ".join([f"{v.get('value','')}@{v.get('odd','')}" for v in valores])
+                linhas.append(f"  [{bk}] {nome_mercado}: {odds_str}")
+        return "\n".join(linhas)
+    except Exception:
+        return ""
+
+
+# =====================================================
+# CONTEXTO AO VIVO COMPLETO
 # =====================================================
 def buscar_contexto_ao_vivo(jogo, fixture_id):
     """
-    Monta contexto ao vivo com estatísticas individuais dos jogadores.
+    Monta contexto ao vivo COMPLETO com:
+    - Stats do jogo (passes, precisão, chutes bloqueados, ataques perigosos)
+    - Eventos (gols, cartões, subs com minuto exato)
+    - Odds ao vivo
+    - Stats individuais dos jogadores
+    - Faltas por jogador (risco de cartão)
     """
     casa    = jogo["casa"]
     fora    = jogo["fora"]
     minuto  = jogo.get("minuto", "?")
     placar  = jogo.get("placar", "0 x 0")
     pressao = jogo.get("pressao", 0)
-    stats   = jogo.get("stats", "indisponível")
 
     contexto = (
         f"Jogo: {casa} x {fora}\n"
         f"Minuto: {minuto}'\n"
         f"Placar: {placar}\n"
-        f"Índice de Pressão: {pressao}\n"
-        f"Estatísticas do jogo: {stats}\n\n"
+        f"Índice de Pressão: {pressao}\n\n"
     )
 
-    # Estatísticas individuais ao vivo
+    # ── Stats completas do jogo ──────────────────────
+    stats_raw = jogo.get("stats_raw", [])
+    if stats_raw and len(stats_raw) >= 2:
+        def pegar_stat(s, nome):
+            for item in s:
+                if item["type"] == nome:
+                    v = item["value"]
+                    return v if v is not None else 0
+            return 0
+
+        home_s = stats_raw[0]["statistics"]
+        away_s = stats_raw[1]["statistics"]
+        th = stats_raw[0].get("team", {}).get("name", casa)
+        ta = stats_raw[1].get("team", {}).get("name", fora)
+
+        contexto += f"📊 ESTATÍSTICAS COMPLETAS DO JOGO:\n"
+        stats_campos = [
+            ("Total Shots",       "Chutes Totais"),
+            ("Shots on Goal",     "Chutes no Gol"),
+            ("Shots off Goal",    "Chutes Fora"),
+            ("Blocked Shots",     "Chutes Bloqueados"),
+            ("Ball Possession",   "Posse de Bola"),
+            ("Corner Kicks",      "Escanteios"),
+            ("Fouls",             "Faltas"),
+            ("Yellow Cards",      "Cartões Amarelos"),
+            ("Red Cards",         "Cartões Vermelhos"),
+            ("Offsides",          "Impedimentos"),
+            ("Goalkeeper Saves",  "Defesas do Goleiro"),
+            ("Total passes",      "Passes Totais"),
+            ("Passes accurate",   "Passes Certos"),
+            ("Passes %",          "Precisão Passes"),
+        ]
+        contexto += f"  {'Estatística':<25} {th:<20} {ta}\n"
+        contexto += "  " + "-"*55 + "\n"
+        for campo, nome_pt in stats_campos:
+            vh = pegar_stat(home_s, campo)
+            va = pegar_stat(away_s, campo)
+            if vh or va:
+                contexto += f"  {nome_pt:<25} {str(vh):<20} {va}\n"
+        contexto += "\n"
+    else:
+        # Fallback para texto simples
+        stats_txt = jogo.get("stats", "indisponível")
+        contexto += f"Estatísticas: {stats_txt}\n\n"
+
+    # ── Eventos do jogo ─────────────────────────────
+    try:
+        eventos = buscar_eventos_ao_vivo(fixture_id)
+        if eventos:
+            contexto += "📋 EVENTOS DO JOGO:\n"
+            contexto += "\n".join(eventos) + "\n\n"
+    except Exception:
+        pass
+
+    # ── Odds ao vivo ────────────────────────────────
+    try:
+        odds_live = buscar_odds_ao_vivo(fixture_id)
+        if odds_live:
+            contexto += odds_live + "\n\n"
+    except Exception:
+        pass
+
+    # ── Stats individuais dos jogadores ─────────────
     try:
         jogadores = buscar_stats_jogadores_ao_vivo(fixture_id)
         if jogadores:
-            contexto += "🔥 DESTAQUES AO VIVO (top 10 jogadores em campo):\n"
+            contexto += "🔥 DESTAQUES AO VIVO (top 10 jogadores):\n"
             for j in jogadores:
                 linha = f"  [{j['time']}] {j['nome']} | {j['minutos']}min"
                 if j['gols']:    linha += f" | ⚽{j['gols']} gol(s)"
@@ -297,8 +427,39 @@ def buscar_contexto_ao_vivo(jogo, fixture_id):
                 if j['vermelho']:linha += f" | 🟥 VERMELHO"
                 if j['rating']:  linha += f" | Nota: {j['rating']}"
                 contexto += linha + "\n"
+            contexto += "\n"
+    except Exception:
+        pass
+
+    # ── Jogadores em risco de cartão (mais faltas) ───
+    try:
+        data_players = _get(f"fixtures/players?fixture={fixture_id}")
+        em_risco = []
+        for time in data_players:
+            nome_time = time.get("team", {}).get("name", "?")
+            for item in time.get("players", []):
+                p = item.get("player", {})
+                s = item.get("statistics", [{}])[0]
+                faltas   = s.get("fouls", {}).get("committed", 0) or 0
+                amarelo  = s.get("cards", {}).get("yellow", 0) or 0
+                minutos  = s.get("games", {}).get("minutes", 0) or 0
+                if faltas >= 2 and minutos > 0:
+                    em_risco.append({
+                        "time": nome_time,
+                        "nome": p.get("name", "?"),
+                        "faltas": faltas,
+                        "amarelo": amarelo
+                    })
+        if em_risco:
+            em_risco.sort(key=lambda x: x["faltas"], reverse=True)
+            contexto += "⚠️ JOGADORES EM RISCO DE CARTÃO (≥2 faltas):\n"
+            for j in em_risco[:5]:
+                ja = " 🟨JÁ AMARELADO" if j["amarelo"] else ""
+                contexto += f"  {j['time']} | {j['nome']} | {j['faltas']} faltas{ja}\n"
+            contexto += "\n"
     except Exception:
         pass
 
     return contexto
+
     
