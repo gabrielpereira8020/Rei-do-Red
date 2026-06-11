@@ -8,9 +8,47 @@ Sem odds nessa etapa — a IA refina depois.
 import re
 
 
+# Liga_ids sem cobertura em nenhuma odds API — penalizadas no ranking
+LIGAS_SEM_ODDS = {
+    189, 482, 1090,  # Ligas amadoras australianas
+    256, 489,        # NPSL/USL League Two — ligas amadoras americanas
+    411,             # Elite One Camarões
+    666,             # Futebol feminino não coberto
+    914,             # Sub-20 internacionais
+    131, 132,        # Argentina divisões baixas
+    341,             # Vietnã V.League
+}
+
+# Liga_ids com boa cobertura — priorizados
+LIGAS_COM_ODDS = {
+    71, 72, 73,      # Brasileirão A, B, C
+    39, 40, 41, 42,  # Inglaterra
+    135, 136,        # Itália
+    140, 141,        # Espanha
+    78, 79,          # Alemanha
+    61, 62,          # França
+    2, 3, 848,       # Champions, Europa, Conference
+    13, 11,          # Libertadores, Sudamericana
+    1, 9, 10,        # Copa do Mundo, Amistosos internacionais
+    253, 254, 909,   # MLS, USL
+    128,             # Argentina Primeira
+    262,             # México Liga MX
+    98,              # Japan J-League
+    255,             # USL Championship (semi-pro, tem odds)
+}
+
+
 def calcular_score_stats(jogo):
     score = 0
     detalhes = []
+
+    liga_id = jogo.get("liga_id", 0)
+
+    # 0. Penalidade por liga sem cobertura de odds (-50 pts)
+    # Garante que ligas amadoras não passem na frente de ligas com odds reais
+    if liga_id in LIGAS_SEM_ODDS:
+        score -= 50
+        detalhes.append(f"Liga sem odds -50 (id={liga_id})")
 
     # 1. Prioridade da liga (ate 20 pts)
     prioridade = jogo.get("prioridade", 3)
@@ -20,9 +58,12 @@ def calcular_score_stats(jogo):
     elif prioridade == 2:
         score += 12
         detalhes.append("Liga media +12")
+    elif liga_id in LIGAS_COM_ODDS:
+        score += 8   # Liga conhecida com odds mas prioridade 3
+        detalhes.append("Liga com odds +8")
     else:
-        score += 4
-        detalhes.append("Liga menor +4")
+        score += 2
+        detalhes.append("Liga menor +2")
 
     # 2. Forma mandante (ate 20 pts)
     forma_home = jogo.get("forma_home", "")
@@ -132,4 +173,5 @@ def validar_odd_para_entrada(odd_real, odd_min, odd_max, confianca_ia):
         return True, f"IA confiante ({confianca_ia}/100) odd {odd_real} OK"
 
     return True, f"Odd {odd_real} dentro da faixa ({odd_min}-{odd_max})"
-  
+
+
