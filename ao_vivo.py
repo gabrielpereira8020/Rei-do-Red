@@ -132,15 +132,16 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     st.metric("🔥 Índice de Pressão", pressao)
 
                     jogo_info = {
-                        "id":      fixture_id,
-                        "casa":    home,
-                        "fora":    away,
-                        "casa_id": home_id,
-                        "fora_id": away_id,
-                        "minuto":  str(tempo),
-                        "placar":  home + " " + str(gols_home) + " x " + str(gols_away) + " " + away,
-                        "stats":   stats_texto,
-                        "pressao": pressao
+                        "id":        fixture_id,
+                        "casa":      home,
+                        "fora":      away,
+                        "casa_id":   home_id,
+                        "fora_id":   away_id,
+                        "minuto":    str(tempo),
+                        "placar":    home + " " + str(gols_home) + " x " + str(gols_away) + " " + away,
+                        "stats":     stats_texto,
+                        "stats_raw": stats,       # stats brutas para contexto completo
+                        "pressao":   pressao
                     }
 
                     resposta = gerar_analise_ao_vivo(jogo_info)
@@ -164,4 +165,5 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                         "Pressão: " + str(pressao) + "\n\n" +
                         resposta[:800]
                     )
+
                     
