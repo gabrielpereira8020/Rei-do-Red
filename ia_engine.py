@@ -29,7 +29,7 @@ Responda EXATAMENTE neste formato:
 (aposta mais segura baseada nos dados reais)
 
 📊 CONFIANÇA:
-(número de 0 a 100)
+(apenas número de 0 a 10)
 
 💎 OPORTUNIDADE DE OURO:
 (aposta de valor com base nos dados)
@@ -116,38 +116,43 @@ def gerar_analise_ao_vivo(jogo):
 Você é uma IA especialista em trading esportivo AO VIVO.
 Responda SOMENTE em texto puro, SEM asteriscos, SEM markdown, SEM negrito.
 
-Analise o momento ATUAL da partida com os dados ao vivo abaixo:
+Analise o momento ATUAL da partida com TODOS os dados ao vivo abaixo:
 
 {contexto}
 
-Analise os 3 mercados: GOLS, ESCANTEIOS e CARTÕES.
-Use os dados reais dos jogadores em campo.
+INSTRUÇÕES:
+- Use os eventos reais (gols, cartões, subs) para entender o momento do jogo
+- Use as faltas por jogador para identificar riscos de cartão
+- Use passes e posse para avaliar domínio do jogo
+- Use chutes bloqueados e defesas do goleiro para avaliar pressão real
+- Use as odds ao vivo se disponíveis para calibrar a análise
+- Analise os 3 mercados: GOLS, ESCANTEIOS e CARTÕES
 
 Responda EXATAMENTE neste formato:
 
 ⚡ ENTRADA RECOMENDADA:
-(Qual mercado entrar AGORA entre gols, escanteios ou cartões e por quê)
+(Qual mercado entrar AGORA e por quê — baseado nos dados reais)
 
 🎯 CRAVO AO VIVO:
-(Melhor aposta agora — pode ser gol de jogador, escanteio ou cartão)
+(Melhor aposta agora — gol de jogador específico, próximo escanteio ou cartão iminente)
 
 ⚽ GOLS AO VIVO:
-(Tendência de gols nos próximos minutos)
+(Tendência de gols baseada em chutes, pressão e odds ao vivo)
 
 🚩 ESCANTEIOS AO VIVO:
-(Tendência de escanteios baseada no volume de ataque)
+(Tendência baseada em volume de ataque, chutes bloqueados e escanteios acumulados)
 
 🟨 CARTÕES AO VIVO:
-(Jogador em risco de cartão baseado em faltas)
+(Nome do jogador em maior risco com quantidade de faltas — use os dados reais)
 
 📊 CONFIANÇA:
 (apenas número de 0 a 10)
 
 ⚠️ RISCOS:
-(1 ou 2 riscos principais)
+(1 ou 2 riscos principais baseados nos dados)
 
 🔮 FEELING:
-(sua opinião pessoal sobre esse momento do jogo)
+(sua leitura do momento atual do jogo)
 
 📊 PROJEÇÃO RESTANTE {casa}:
 GOLS: (quantos gols ainda espera desse time até o fim)
@@ -181,4 +186,4 @@ FIM
             f"📊 PROJEÇÃO RESTANTE {jogo['fora']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\n"
             "FIM"
         )
-        
+
