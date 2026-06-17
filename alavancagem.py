@@ -122,7 +122,8 @@ def ia_analisar_lote(jogos):
             "Analise os jogos e para CADA UM escolha o mercado mais seguro.\n\n"
             + ctx +
             "MERCADOS: Over 0.5 HT | Over 1.5 FT | Over 2.5 FT | "
-            "Double Chance 1X | Double Chance X2 | Ambos Marcam Sim | Vitoria Mandante | Under 4.5 FT\n"
+"Double Chance 1X | Double Chance X2 | Ambos Marcam Sim | Vitoria Mandante | Vitoria Visitante | Under 4.5 FT\n"
+          
             "REGRAS: sem dados=recusar true. confianca<72=recusar true.\n"
             "Responda APENAS o JSON array, sem texto antes ou depois, sem markdown:\n"
             f'[{{"jogo":1,"mercado":"Over 1.5 FT","confianca":82,"motivo":"ok","recusar":false}},...] ({n} objetos)'
