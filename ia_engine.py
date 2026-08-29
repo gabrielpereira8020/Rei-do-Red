@@ -1,8 +1,56 @@
 from google import genai
 import streamlit as st
+import time
 from api_football import buscar_contexto_completo, buscar_contexto_ao_vivo
 
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+
+# =====================================================
+# RETRY AUTOMÁTICO PARA ERROS TEMPORÁRIOS DO GEMINI (503)
+# =====================================================
+def _chamar_gemini_com_retry(prompt, max_tentativas=3, espera_base=5):
+    """
+    Chama o Gemini e tenta novamente automaticamente se o erro for
+    temporário (503 - modelo sobrecarregado/indisponível no momento).
+    Usa backoff crescente: espera 5s, depois 10s, depois 15s...
+    Se o erro não for 503 (ex: erro de autenticação, prompt inválido),
+    não faz sentido tentar de novo, então relança na hora.
+    """
+    ultima_excecao = None
+
+    for tentativa in range(1, max_tentativas + 1):
+        try:
+            response = client.models.generate_content(
+                model="models/gemini-3.1-flash-lite",
+                contents=prompt
+            )
+            return response.text
+
+        except Exception as e:
+            ultima_excecao = e
+            erro_str = str(e)
+
+            # Só vale a pena tentar de novo se for erro de indisponibilidade
+            # temporária do modelo (503 / UNAVAILABLE / overloaded)
+            eh_erro_temporario = (
+                "503" in erro_str
+                or "UNAVAILABLE" in erro_str
+                or "overloaded" in erro_str.lower()
+                or "currently exp" in erro_str.lower()
+            )
+
+            if eh_erro_temporario and tentativa < max_tentativas:
+                espera = espera_base * tentativa  # 5s, 10s, 15s...
+                time.sleep(espera)
+                continue
+            else:
+                # Não é erro temporário, ou já esgotou as tentativas
+                raise ultima_excecao
+
+    # Não deveria chegar aqui, mas por garantia:
+    raise ultima_excecao
+
 
 # =====================================================
 # PRÉ-JOGO
@@ -78,11 +126,7 @@ FINALIZAÇÕES: (número inteiro)
 FIM
 """
     try:
-        response = client.models.generate_content(
-            model="models/gemini-3.1-flash-lite",
-            contents=prompt
-        )
-        return response.text
+        return _chamar_gemini_com_retry(prompt)
     except Exception as e:
         return (
             "🔥 APOSTA CRAVADA:\nErro\n"
@@ -167,11 +211,7 @@ CARTÕES: (quantos cartões restantes espera)
 FIM
 """
     try:
-        response = client.models.generate_content(
-            model="models/gemini-3.1-flash-lite",
-            contents=prompt
-        )
-        return response.text
+        return _chamar_gemini_com_retry(prompt)
     except Exception as e:
         return (
             "⚡ ENTRADA RECOMENDADA:\nErro\n"
@@ -186,4 +226,3 @@ FIM
             f"📊 PROJEÇÃO RESTANTE {jogo['fora']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\n"
             "FIM"
         )
-
