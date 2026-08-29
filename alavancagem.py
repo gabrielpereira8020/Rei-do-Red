@@ -96,15 +96,50 @@ def calcular_tabela(banca, odd, total):
 # ETAPA 2 — IA ESCOLHE MERCADO (sem odds ainda)
 # ─────────────────────────────────────────────
 
+def _reparar_json_array(texto, n_esperado):
+    """
+    Tenta recuperar o máximo possível de um JSON array que veio quebrado
+    (truncado no meio, ou com um objeto malformado no meio do array).
+
+    Estratégia: em vez de tentar consertar o texto inteiro de uma vez,
+    localiza cada objeto individual "{...}" com regex e tenta fazer o
+    parse objeto por objeto. Objetos quebrados são simplesmente
+    descartados (e preenchidos como recusados depois), em vez de
+    derrubar o lote inteiro por causa de 1 objeto ruim.
+    """
+    import re
+    objetos_encontrados = re.findall(r"\{[^{}]*\}", texto)
+    resultados = []
+    for obj_str in objetos_encontrados:
+        try:
+            resultados.append(json.loads(obj_str))
+        except Exception:
+            continue
+    return resultados
+
+
 def ia_analisar_lote(jogos):
     """
-    Analisa jogos em lotes de 8 para evitar JSON truncado pelo Gemini.
+    Analisa jogos em lotes pequenos para evitar JSON truncado pelo Gemini.
     Cada lote usa stats resumidas (max 200 chars) para manter prompt pequeno.
+
+    Correções aplicadas:
+    - response_mime_type="application/json": força o Gemini a responder
+      em JSON estruturalmente válido (JSON mode nativo da API), em vez
+      de confiar que ele "vai se comportar" só pelo texto do prompt.
+    - max_output_tokens maior: evita que a resposta seja cortada no meio
+      por falta de espaço, o que quebra a sintaxe do JSON.
+    - Lote reduzido de 8 para 5 jogos: resposta menor = menor chance de
+      truncamento e de erro de sintaxe.
+    - Reparo objeto-por-objeto: se mesmo assim o JSON vier quebrado,
+      tenta recuperar os objetos válidos individualmente em vez de
+      descartar o lote inteiro.
     """
     from google import genai
+    from google.genai import types
     client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-    TAMANHO_LOTE = 8  # max 8 jogos por chamada — evita truncamento JSON
+    TAMANHO_LOTE = 5  # lote menor — reduz ainda mais a chance de truncamento
     todos_resultados = []
 
     for inicio in range(0, len(jogos), TAMANHO_LOTE):
@@ -125,6 +160,7 @@ def ia_analisar_lote(jogos):
 "Double Chance 1X | Double Chance X2 | Ambos Marcam Sim | Vitoria Mandante | Vitoria Visitante | Under 4.5 FT\n"
           
             "REGRAS: sem dados=recusar true. confianca<72=recusar true.\n"
+            "Mantenha o campo 'motivo' bem curto (max 6 palavras).\n"
             "Responda APENAS o JSON array, sem texto antes ou depois, sem markdown:\n"
             f'[{{"jogo":1,"mercado":"Over 1.5 FT","confianca":82,"motivo":"ok","recusar":false}},...] ({n} objetos)'
         )
@@ -132,7 +168,11 @@ def ia_analisar_lote(jogos):
         try:
             response = client.models.generate_content(
                 model="models/gemini-3.1-flash-lite",
-                contents=prompt
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    max_output_tokens=2048,
+                )
             )
             texto = response.text.strip()
             # Limpeza agressiva — remove tudo antes do [ e depois do ]
@@ -142,7 +182,13 @@ def ia_analisar_lote(jogos):
                 texto = texto[inicio_json:fim_json+1]
             texto = texto.replace("```json","").replace("```","").strip()
 
-            resultados = json.loads(texto)
+            try:
+                resultados = json.loads(texto)
+            except json.JSONDecodeError:
+                # JSON veio quebrado — tenta recuperar objeto por objeto
+                # em vez de descartar o lote inteiro
+                resultados = _reparar_json_array(texto, n)
+
             if isinstance(resultados, list) and len(resultados) == n:
                 todos_resultados.extend(resultados)
             else:
@@ -171,6 +217,7 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
     Monta o bilhete final: simples ou combinada.
     """
     from google import genai
+    from google.genai import types
     client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
     if not jogos_aprovados:
@@ -221,7 +268,11 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
     try:
         response = client.models.generate_content(
             model="models/gemini-3.1-flash-lite",
-            contents=prompt
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                max_output_tokens=2048,
+            )
         )
         texto = response.text.strip().replace("```json", "").replace("```", "").strip()
         return json.loads(texto)
@@ -407,7 +458,7 @@ def _buscar_no_cache(cache_odds, home, away):
     """
     import unicodedata
 
-    def _norm(nome):
+  def _norm(nome):
         nome = str(nome).lower().strip()
         nome = "".join(
             c for c in unicodedata.normalize("NFD", nome)
@@ -484,7 +535,6 @@ def tela_alavancagem(supabase=None):
 
     with tab3:
         st.markdown("### 🔍 Log de Etapas")
-        # Usa ultimo_log que persiste após rerun; alav_log_etapas é zerado a cada execução
         logs = st.session_state.get("alav_ultimo_log") or st.session_state.get("alav_log_etapas", [])
         if logs:
             st.caption(f"📋 {len(logs)} entries no log")
@@ -513,7 +563,6 @@ def tela_alavancagem(supabase=None):
 def _tela_configuracao(api_key, odds_api_key, supabase):
     st.markdown("### ⚙️ Configurar Parâmetros")
 
-    # NOVOS CONTROLES DE CONTROLE VISUAL DE TRÁFEGO
     st.markdown("#### ⚡ Arquitetura & Redução de Gargalo")
     c_modo1, c_modo2 = st.columns(2)
     with c_modo1:
@@ -558,7 +607,6 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
         else:
             st.caption("Abaixo disso, a IA descarta o jogo")
 
-    # Preview
     st.markdown("### 👁️ Preview Alvo")
     preview = calcular_tabela(banca, odd, int(total))
     cols = st.columns([1, 2, 2, 2, 2])
@@ -588,7 +636,6 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
 **Etapa 4 — IA & Odds Cascata** processa apenas o bloco ativo em 1 request unificado de IA, puxando cotação dos sobreviventes.
         """)
 
-    # Seleção de APIs
     st.markdown("### 🔌 APIs de Odds")
     st.caption("Selecione quais APIs usar. Desative as de cota limitada para testes.")
 
@@ -681,7 +728,7 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
             )
 
         tabela = calcular_tabela(banca, odd, int(total))
-        st.session_state.alav_entradas = tablea = tabela
+        st.session_state.alav_entradas = tabela
         st.session_state.alav_jogos = jogos_prontos
         st.session_state.alav_ativa = True
         st.session_state.alav_entrada_atual = 0
