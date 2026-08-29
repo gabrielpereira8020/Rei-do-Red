@@ -1,5 +1,6 @@
 import requests
 import streamlit as st
+import time
 from datetime import datetime, timedelta
 
 API_KEY = st.secrets["API_KEY"]
@@ -8,8 +9,53 @@ HEADERS = {
     "x-rapidapi-host": "v3.football.api-sports.io"
 }
 
+
+# =====================================================
+# RATE LIMITER — máximo 300 requisições por minuto
+# =====================================================
+class RateLimiter:
+    """
+    Controla o número de requisições feitas à API dentro de uma janela
+    de tempo. Ao atingir o limite, pausa a execução até a janela
+    seguinte começar, evitando estourar o limite do plano.
+    """
+    def __init__(self, max_requests=300, period_seconds=60):
+        self.max_requests = max_requests
+        self.period_seconds = period_seconds
+        self.count = 0
+        self.window_start = time.time()
+
+    def wait_if_needed(self):
+        elapsed = time.time() - self.window_start
+
+        # Se a janela de tempo já passou, reseta o contador
+        if elapsed >= self.period_seconds:
+            self.count = 0
+            self.window_start = time.time()
+            elapsed = 0
+
+        # Se atingiu o limite dentro da janela atual, espera o restante
+        if self.count >= self.max_requests:
+            sleep_time = self.period_seconds - elapsed
+            if sleep_time > 0:
+                with st.spinner(
+                    f"⏳ Limite de {self.max_requests} requisições/min atingido. "
+                    f"Aguardando {int(sleep_time)}s para continuar..."
+                ):
+                    time.sleep(sleep_time)
+            self.count = 0
+            self.window_start = time.time()
+
+        self.count += 1
+
+
+# Instância única e global — todas as chamadas de _get() passam por aqui
+_limiter = RateLimiter(max_requests=300, period_seconds=60)
+
+
 def _get(endpoint):
     try:
+        _limiter.wait_if_needed()
         url = "https://v3.football.api-sports.io/" + endpoint
         r = requests.get(url, headers=HEADERS, timeout=15)
         if r.status_code != 200:
@@ -125,9 +171,9 @@ def buscar_stats_jogadores_ao_vivo(fixture_id):
         data = _get(f"fixtures/players?fixture={fixture_id}")
         destaques = []
 
-        for time in data:
-            nome_time = time.get("team", {}).get("name", "?")
-            jogadores  = time.get("players", [])
+        for time_ in data:
+            nome_time = time_.get("team", {}).get("name", "?")
+            jogadores  = time_.get("players", [])
 
             for item in jogadores:
                 p     = item.get("player", {})
@@ -189,18 +235,18 @@ def buscar_contexto_completo(jogo):
         if standings:
             tabela = standings[0]["league"]["standings"][0]
             contexto += "📊 CLASSIFICAÇÃO:\n"
-            for time in tabela:
-                nome = time["team"]["name"]
+            for time_ in tabela:
+                nome = time_["team"]["name"]
                 if nome in [casa, fora]:
-                    pos   = time["rank"]
-                    pts   = time["points"]
-                    pg    = time["all"]["played"]
-                    vit   = time["all"]["win"]
-                    emp   = time["all"]["draw"]
-                    der   = time["all"]["lose"]
-                    gp    = time["all"]["goals"]["for"]
-                    gc    = time["all"]["goals"]["against"]
-                    forma = time.get("form", "N/A")
+                    pos   = time_["rank"]
+                    pts   = time_["points"]
+                    pg    = time_["all"]["played"]
+                    vit   = time_["all"]["win"]
+                    emp   = time_["all"]["draw"]
+                    der   = time_["all"]["lose"]
+                    gp    = time_["all"]["goals"]["for"]
+                    gc    = time_["all"]["goals"]["against"]
+                    forma = time_.get("form", "N/A")
                     contexto += f"  {nome}: {pos}º | {pts}pts | {pg}J {vit}V {emp}E {der}D | Gols: {gp}/{gc} | Forma recente: {forma}\n"
             contexto += "\n"
     except Exception:
@@ -435,9 +481,9 @@ def buscar_contexto_ao_vivo(jogo, fixture_id):
     try:
         data_players = _get(f"fixtures/players?fixture={fixture_id}")
         em_risco = []
-        for time in data_players:
-            nome_time = time.get("team", {}).get("name", "?")
-            for item in time.get("players", []):
+        for time_ in data_players:
+            nome_time = time_.get("team", {}).get("name", "?")
+            for item in time_.get("players", []):
                 p = item.get("player", {})
                 s = item.get("statistics", [{}])[0]
                 faltas   = s.get("fouls", {}).get("committed", 0) or 0
@@ -461,5 +507,4 @@ def buscar_contexto_ao_vivo(jogo, fixture_id):
         pass
 
     return contexto
-
-    
+        
