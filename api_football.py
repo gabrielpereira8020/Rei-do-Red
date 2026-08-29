@@ -50,7 +50,9 @@ class RateLimiter:
 
 
 # Instância única e global — todas as chamadas de _get() passam por aqui
-_limiter = RateLimiter(max_requests=300, period_seconds=60)
+# Usamos 280 em vez de 300 como margem de segurança (evita bater exatamente
+# no teto do plano, útil caso haja pequenas variações de tempo/contagem)
+_limiter = RateLimiter(max_requests=280, period_seconds=60)
 
 
 def _get(endpoint):
@@ -507,4 +509,4 @@ def buscar_contexto_ao_vivo(jogo, fixture_id):
         pass
 
     return contexto
-        
+                
