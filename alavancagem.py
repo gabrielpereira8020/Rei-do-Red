@@ -458,7 +458,7 @@ def _buscar_no_cache(cache_odds, home, away):
     """
     import unicodedata
 
-  def _norm(nome):
+def _norm(nome):
         nome = str(nome).lower().strip()
         nome = "".join(
             c for c in unicodedata.normalize("NFD", nome)
