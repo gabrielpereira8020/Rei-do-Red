@@ -474,7 +474,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
                     jogo["candidato_combinada"] = True
                     jogos_com_odds.append(jogo)
                     log_etapa("  🔗 combinada: " + jogo["nome"] + " @ " + str(melhor_odd) + " via " + fonte_odd)
-                else:
+           else:
                     log_etapa("  ❌ descartado: " + jogo["nome"] + " @ " + str(melhor_odd) + " — odd baixa")
 
         # Condição de parada inteligente: Se já temos material para a IA montar o bilhete, aborta loops extras
