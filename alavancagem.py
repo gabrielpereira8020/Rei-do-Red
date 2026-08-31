@@ -470,11 +470,11 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
                 else:
                     log_etapa("  ❌ " + jogo["nome"] + " @ " + str(melhor_odd) + " — " + motivo_odd)
             else:
-                 if jogo["ia_confianca"] >= confianca_min:
+                if jogo["ia_confianca"] >= confianca_min:
                     jogo["candidato_combinada"] = True
                     jogos_com_odds.append(jogo)
                     log_etapa("  🔗 combinada: " + jogo["nome"] + " @ " + str(melhor_odd) + " via " + fonte_odd)
-           else:
+                else:
                     log_etapa("  ❌ descartado: " + jogo["nome"] + " @ " + str(melhor_odd) + " — odd baixa")
 
         # Condição de parada inteligente: Se já temos material para a IA montar o bilhete, aborta loops extras
@@ -935,7 +935,7 @@ def _tela_execucao(supabase):
             st.error(linha)
 
     if atual >= len(entradas):
-       if all(e["status"] is True for e in entradas):
+        if all(e["status"] is True for e in entradas):
             retorno_final = entradas[-1]["retorno"]
             lucro = round(retorno_final - st.session_state.alav_banca_inicial, 2)
             st.success(f"🏆 COMPLETO! R$ {retorno_final} | Lucro: +R$ {lucro}")
