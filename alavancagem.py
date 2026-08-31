@@ -54,6 +54,11 @@ def init_estado():
         "alav_confianca_min": 65,
         "alav_log_etapas": [],
         "alav_modo_operacao": "Free (Econômico)",
+        # Estados da etapa de preenchimento manual de odds
+        "alav_aguardando_odds_manual": False,
+        "alav_jogos_pendentes_odds": [],
+        "alav_jogos_com_odds_parcial": [],
+        "alav_indice_pendente": 0,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -345,7 +350,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
 
     if not jogos_raw:
         etapa1.error("Nenhum jogo encontrado na API Football para hoje/amanhã.")
-        return []
+        return [], []
 
     # ──────────────────────────────────────────
     # ETAPA 2 — Pré-Ranking na memória (0 requests adicionais)
@@ -363,6 +368,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
     # ──────────────────────────────────────────
     TAMANHO_BLOCO = 10
     jogos_com_odds = []
+    jogos_sem_odds = []  # aprovados pela IA mas sem odd automática — vão pro preenchimento manual
     
     log_etapa(f"Iniciando varredura por demanda. Modo: {modo_operacao}")
     
@@ -456,6 +462,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
 
             if not melhor_odd:
                 log_etapa("  sem odds: " + jogo["nome"] + " (liga_id=" + str(liga_id) + ")")
+                jogos_sem_odds.append(jogo)
                 continue
 
             jogo["melhor_odd"] = melhor_odd
@@ -488,9 +495,9 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
             break
 
     etapa1.empty()
-    log_etapa(f"Pipeline concluido: {len(jogos_com_odds)} jogos prontos para o bilhete")
+    log_etapa(f"Pipeline concluido: {len(jogos_com_odds)} jogos prontos para o bilhete, {len(jogos_sem_odds)} aguardando odd manual")
     st.session_state["alav_ultimo_log"] = st.session_state.get("alav_log_etapas", [])
-    return jogos_com_odds
+    return jogos_com_odds, jogos_sem_odds
 
 
 def _buscar_no_cache(cache_odds, home, away):
@@ -593,7 +600,9 @@ def tela_alavancagem(supabase=None):
             "Lazy Loading por Lotes (Filtro IA & Odds) → Bilhete final**"
         )
 
-        if not st.session_state.alav_ativa:
+        if st.session_state.alav_aguardando_odds_manual:
+            _tela_odds_manuais()
+        elif not st.session_state.alav_ativa:
             _tela_configuracao(api_key, odds_api_key, supabase)
         else:
             _tela_execucao(supabase)
@@ -726,7 +735,7 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
         st.session_state.alav_log_etapas = []
         st.session_state.alav_ultimo_log = []
 
-        jogos_prontos = executar_pipeline_alavancagem(
+        jogos_prontos, jogos_pendentes = executar_pipeline_alavancagem(
             api_key, odds_api_key,
             odd_min, odd_max, confianca_min,
             usar_oddspapi=usar_oddspapi_ui,
@@ -736,6 +745,16 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
         )
 
         st.session_state.alav_ultimo_log = list(st.session_state.get("alav_log_etapas", []))
+
+        # Se sobrou jogo aprovado pela IA mas sem odd automática, manda
+        # pra tela de preenchimento manual antes de decidir se falhou ou não
+        if jogos_pendentes:
+            st.session_state.alav_jogos_pendentes_odds = jogos_pendentes
+            st.session_state.alav_jogos_com_odds_parcial = jogos_prontos
+            st.session_state.alav_indice_pendente = 0
+            st.session_state.alav_aguardando_odds_manual = True
+            st.rerun()
+            return
 
         if not jogos_prontos:
             log_txt = "\n".join(st.session_state.alav_ultimo_log)
@@ -775,6 +794,105 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
         st.session_state.alav_jogos = jogos_prontos
         st.session_state.alav_ativa = True
         st.session_state.alav_entrada_atual = 0
+        st.rerun()
+
+
+# ─────────────────────────────────────────────
+# TELA DE PREENCHIMENTO MANUAL DE ODDS
+# ─────────────────────────────────────────────
+
+def _tela_odds_manuais():
+    """
+    Mostra, um de cada vez, os jogos que a IA aprovou mas que nenhuma
+    API de odds conseguiu confirmar automaticamente. O usuário digita
+    a odd manualmente (ex: olhando direto na casa de apostas) ou pula
+    o jogo. Ao final, os jogos confirmados (automáticos + manuais)
+    seguem para a montagem do bilhete normalmente.
+    """
+    pendentes   = st.session_state.get("alav_jogos_pendentes_odds", [])
+    indice      = st.session_state.get("alav_indice_pendente", 0)
+    confirmados = st.session_state.get("alav_jogos_com_odds_parcial", [])
+
+    st.subheader("🙋 Preencha as odds que não encontramos automaticamente")
+    st.caption(
+        "A IA já aprovou esses jogos com base nas estatísticas, mas nenhuma "
+        "das APIs de odds conectadas encontrou a cotação. Se você tiver a odd "
+        "à mão, digite abaixo — isso aumenta as chances de montar um bilhete."
+    )
+
+    # Já passamos por todos os pendentes — segue o fluxo normal
+    if indice >= len(pendentes):
+        st.session_state.alav_jogos = confirmados
+        st.session_state.alav_aguardando_odds_manual = False
+        st.session_state.alav_jogos_pendentes_odds = []
+        st.session_state.alav_indice_pendente = 0
+
+        if not confirmados:
+            st.error("❌ Nenhuma odd disponível (nem automática, nem manual). Tente novamente mais tarde.")
+            if st.button("🔄 Nova tentativa", use_container_width=True):
+                _resetar_alavancagem()
+                st.rerun()
+            return
+
+        banca = st.session_state.alav_banca_inicial
+        odd   = st.session_state.alav_odd_alvo
+        total = st.session_state.alav_total_entradas
+
+        st.success(f"✅ {len(confirmados)} jogo(s) prontos (automáticos + manuais)!")
+        st.markdown("**🏆 Jogos prontos para o bilhete:**")
+        for j in confirmados:
+            st.markdown(
+                f"**#{j.get('score', 0)}/100** | {j['nome']} | {j.get('liga_nome', '')} | "
+                f"Mercado: **{j.get('ia_mercado', '')}** | "
+                f"Odd: {j.get('melhor_odd', '?')}"
+            )
+
+        if st.button("▶️ Iniciar Alavancagem com esses jogos", use_container_width=True):
+            tabela = calcular_tabela(banca, odd, int(total))
+            st.session_state.alav_entradas = tabela
+            st.session_state.alav_ativa = True
+            st.session_state.alav_entrada_atual = 0
+            st.rerun()
+        return
+
+    # Ainda tem jogo pendente — mostra o atual
+    jogo = pendentes[indice]
+    st.progress(indice / max(len(pendentes), 1))
+    st.markdown(f"**Jogo {indice + 1} de {len(pendentes)}**")
+
+    st.info(
+        f"**{jogo.get('nome', '')}** | {jogo.get('liga_nome', '')}\n\n"
+        f"Mercado sugerido pela IA: **{jogo.get('ia_mercado', '')}**\n\n"
+        f"Confiança da IA: {jogo.get('ia_confianca', 0)}/100\n\n"
+        f"Motivo: {jogo.get('ia_motivo', '')}"
+    )
+
+    odd_manual = st.number_input(
+        "Odd que você encontrou para esse mercado",
+        min_value=1.01, max_value=50.0, value=1.50, step=0.01,
+        key=f"odd_manual_{indice}"
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("✅ Confirmar odd", key=f"confirmar_odd_{indice}", use_container_width=True):
+            jogo["melhor_odd"] = float(odd_manual)
+            jogo["tem_odds"] = True
+            jogo["candidato_combinada"] = float(odd_manual) < st.session_state.alav_odd_min
+            confirmados.append(jogo)
+            st.session_state.alav_jogos_com_odds_parcial = confirmados
+            st.session_state.alav_indice_pendente = indice + 1
+            log_etapa("  ✋ odd manual: " + jogo.get("nome", "") + " @ " + str(odd_manual))
+            st.rerun()
+    with c2:
+        if st.button("⏭️ Pular esse jogo", key=f"pular_odd_{indice}", use_container_width=True):
+            log_etapa("  ⏭️ pulado (sem odd manual): " + jogo.get("nome", ""))
+            st.session_state.alav_indice_pendente = indice + 1
+            st.rerun()
+
+    st.markdown("---")
+    if st.button("🚪 Encerrar e usar só o que já tenho até agora", use_container_width=True):
+        st.session_state.alav_indice_pendente = len(pendentes)
         st.rerun()
 
 
