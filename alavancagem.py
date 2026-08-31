@@ -93,6 +93,51 @@ def calcular_tabela(banca, odd, total):
 
 
 # ─────────────────────────────────────────────
+# RETRY AUTOMÁTICO PARA ERROS TEMPORÁRIOS DO GEMINI (503)
+# ─────────────────────────────────────────────
+
+def _chamar_gemini_com_retry(client, prompt, config, max_tentativas=3, espera_base=8):
+    """
+    Chama o Gemini e tenta novamente automaticamente se o erro for
+    temporário (503 - modelo sobrecarregado/indisponível no momento).
+    Usa backoff crescente: espera 8s, depois 16s, depois 24s...
+
+    Se o erro não for 503 (ex: chave inválida, prompt bloqueado), não
+    faz sentido tentar de novo, então relança na hora.
+    """
+    import time
+    ultima_excecao = None
+
+    for tentativa in range(1, max_tentativas + 1):
+        try:
+            response = client.models.generate_content(
+                model="models/gemini-3.1-flash-lite",
+                contents=prompt,
+                config=config
+            )
+            return response.text
+
+        except Exception as e:
+            ultima_excecao = e
+            erro_str = str(e)
+
+            eh_erro_temporario = (
+                "503" in erro_str
+                or "UNAVAILABLE" in erro_str
+                or "overloaded" in erro_str.lower()
+                or "high demand" in erro_str.lower()
+            )
+
+            if eh_erro_temporario and tentativa < max_tentativas:
+                time.sleep(espera_base * tentativa)  # 8s, 16s, 24s...
+                continue
+            else:
+                raise ultima_excecao
+
+    raise ultima_excecao
+
+
+# ─────────────────────────────────────────────
 # ETAPA 2 — IA ESCOLHE MERCADO (sem odds ainda)
 # ─────────────────────────────────────────────
 
@@ -166,15 +211,14 @@ def ia_analisar_lote(jogos):
         )
 
         try:
-            response = client.models.generate_content(
-                model="models/gemini-3.1-flash-lite",
-                contents=prompt,
+            texto = _chamar_gemini_com_retry(
+                client, prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     max_output_tokens=2048,
                 )
             )
-            texto = response.text.strip()
+            texto = texto.strip()
             # Limpeza agressiva — remove tudo antes do [ e depois do ]
             inicio_json = texto.find("[")
             fim_json = texto.rfind("]")
@@ -266,15 +310,14 @@ def ia_montar_bilhete_final(jogos_aprovados, odd_min, odd_max, num_entrada, banc
     )
 
     try:
-        response = client.models.generate_content(
-            model="models/gemini-3.1-flash-lite",
-            contents=prompt,
+        texto = _chamar_gemini_com_retry(
+            client, prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 max_output_tokens=2048,
             )
         )
-        texto = response.text.strip().replace("```json", "").replace("```", "").strip()
+        texto = texto.strip().replace("```json", "").replace("```", "").strip()
         return json.loads(texto)
     except Exception as e:
         return {"sem_entrada": True, "motivo": f"Erro IA bilhete: {e}"}
@@ -427,7 +470,7 @@ def executar_pipeline_alavancagem(api_key, odds_api_key, odd_min, odd_max, confi
                 else:
                     log_etapa("  ❌ " + jogo["nome"] + " @ " + str(melhor_odd) + " — " + motivo_odd)
             else:
-                if jogo["ia_confianca"] >= confianca_min:
+                 if jogo["ia_confianca"] >= confianca_min:
                     jogo["candidato_combinada"] = True
                     jogos_com_odds.append(jogo)
                     log_etapa("  🔗 combinada: " + jogo["nome"] + " @ " + str(melhor_odd) + " via " + fonte_odd)
@@ -892,7 +935,7 @@ def _tela_execucao(supabase):
             st.error(linha)
 
     if atual >= len(entradas):
-        if all(e["status"] is True for e in entradas):
+       if all(e["status"] is True for e in entradas):
             retorno_final = entradas[-1]["retorno"]
             lucro = round(retorno_final - st.session_state.alav_banca_inicial, 2)
             st.success(f"🏆 COMPLETO! R$ {retorno_final} | Lucro: +R$ {lucro}")
