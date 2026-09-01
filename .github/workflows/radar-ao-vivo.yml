@@ -1,0 +1,49 @@
+# Esse arquivo vai numa pasta chamada .github/workflows/ dentro do seu
+# repositório (crie essa pasta se não existir). Ele faz o GitHub rodar
+# o radar_ao_vivo_automatico.py sozinho, de tempos em tempos, sem
+# precisar do app aberto.
+#
+# IMPORTANTE: antes de usar, cadastre as secrets no GitHub em:
+#   Repositório -> Settings -> Secrets and variables -> Actions -> New repository secret
+# Precisa cadastrar (com os mesmos valores que você já usa no secrets.toml):
+#   API_KEY, GEMINI_API_KEY, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
+#   SUPABASE_URL, SUPABASE_KEY
+
+name: Radar Ao Vivo Automático
+
+on:
+  schedule:
+    # Roda a cada 5 minutos. O GitHub Actions usa horário UTC.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}  # permite rodar manualmente pelo botão "Run workflow" no GitHub
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4  # evita que uma execução travada rode até a próxima começar
+    steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Criar arquivo de secrets a partir dos GitHub Secrets
+        run: |
+          mkdir -p .streamlit
+          cat > .streamlit/secrets.toml << EOF
+          API_KEY = "${{ secrets.API_KEY }}"
+          GEMINI_API_KEY = "${{ secrets.GEMINI_API_KEY }}"
+          TELEGRAM_TOKEN = "${{ secrets.TELEGRAM_TOKEN }}"
+          TELEGRAM_CHAT_ID = "${{ secrets.TELEGRAM_CHAT_ID }}"
+          SUPABASE_URL = "${{ secrets.SUPABASE_URL }}"
+          SUPABASE_KEY = "${{ secrets.SUPABASE_KEY }}"
+          EOF
+
+      - name: Rodar o radar
+        run: python radar_ao_vivo_automatico.py
