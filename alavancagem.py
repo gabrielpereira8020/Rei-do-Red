@@ -803,97 +803,99 @@ def _tela_configuracao(api_key, odds_api_key, supabase):
 
 def _tela_odds_manuais():
     """
-    Mostra, um de cada vez, os jogos que a IA aprovou mas que nenhuma
-    API de odds conseguiu confirmar automaticamente. O usuário digita
-    a odd manualmente (ex: olhando direto na casa de apostas) ou pula
-    o jogo. Ao final, os jogos confirmados (automáticos + manuais)
-    seguem para a montagem do bilhete normalmente.
+    Mostra TODOS os jogos pendentes de uma vez, numa lista com um campo
+    de odd para cada um. O usuário preenche só os que quiser (deixa 0
+    nos que não quer usar) e aperta 1 botão só no final para montar o
+    bilhete com tudo que foi preenchido — evita ter que clicar jogo por
+    jogo quando há muitos pendentes (ex: 20+ jogos de ligas pequenas).
     """
-    pendentes   = st.session_state.get("alav_jogos_pendentes_odds", [])
-    indice      = st.session_state.get("alav_indice_pendente", 0)
-    confirmados = st.session_state.get("alav_jogos_com_odds_parcial", [])
+    pendentes = st.session_state.get("alav_jogos_pendentes_odds", [])
 
     st.subheader("🙋 Preencha as odds que não encontramos automaticamente")
     st.caption(
-        "A IA já aprovou esses jogos com base nas estatísticas, mas nenhuma "
-        "das APIs de odds conectadas encontrou a cotação. Se você tiver a odd "
-        "à mão, digite abaixo — isso aumenta as chances de montar um bilhete."
+        f"A IA aprovou {len(pendentes)} jogo(s) com base nas estatísticas, mas nenhuma "
+        "das APIs de odds conectadas encontrou a cotação (comum em ligas menores). "
+        "Preencha a odd de quantos você quiser (deixe em 0 os que não tiver ou não quiser "
+        "usar) e clique em **Montar bilhete** no final."
     )
 
-    # Já passamos por todos os pendentes — segue o fluxo normal
-    if indice >= len(pendentes):
-        st.session_state.alav_jogos = confirmados
-        st.session_state.alav_aguardando_odds_manual = False
+    if not pendentes:
+        st.info("Nenhum jogo pendente de odd manual.")
+        if st.button("Continuar", use_container_width=True):
+            st.session_state.alav_aguardando_odds_manual = False
+            st.rerun()
+        return
+
+    with st.form("form_odds_manuais"):
+        valores_digitados = {}
+        for i, jogo in enumerate(pendentes):
+            st.markdown(
+                f"**{jogo.get('nome', '')}** | {jogo.get('liga_nome', '')} | "
+                f"Mercado IA: **{jogo.get('ia_mercado', '')}** | "
+                f"Confiança: {jogo.get('ia_confianca', 0)}/100"
+            )
+            valores_digitados[i] = st.number_input(
+                "Odd (deixe 0 para pular esse jogo)",
+                min_value=0.0, max_value=50.0, value=0.0, step=0.01,
+                key=f"odd_manual_{i}",
+                label_visibility="collapsed"
+            )
+            st.markdown("---")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            enviado = st.form_submit_button("🎟️ Montar bilhete com essas odds", use_container_width=True)
+        with col_b:
+            pular_tudo = st.form_submit_button("⏭️ Pular todos (sem manual)", use_container_width=True)
+
+    if enviado or pular_tudo:
+        confirmados = list(st.session_state.get("alav_jogos_com_odds_parcial", []))
+
+        if enviado:
+            for i, jogo in enumerate(pendentes):
+                odd_val = valores_digitados.get(i, 0.0)
+                if odd_val and odd_val >= 1.01:
+                    jogo["melhor_odd"] = float(odd_val)
+                    jogo["tem_odds"] = True
+                    jogo["candidato_combinada"] = float(odd_val) < st.session_state.alav_odd_min
+                    confirmados.append(jogo)
+                    log_etapa("  ✋ odd manual: " + jogo.get("nome", "") + " @ " + str(odd_val))
+
+        if enviado and not confirmados:
+            # Clicou em montar bilhete mas não preencheu nenhuma odd —
+            # mantém a tela e os pendentes, só avisa e deixa tentar de novo
+            st.error("❌ Nenhuma odd foi preenchida. Preencha ao menos uma odd, ou clique em 'Pular todos'.")
+            return
+
+        # A partir daqui: ou o usuário preencheu pelo menos 1 odd, ou
+        # escolheu explicitamente pular tudo — nos dois casos, limpa os
+        # pendentes e segue o fluxo
         st.session_state.alav_jogos_pendentes_odds = []
         st.session_state.alav_indice_pendente = 0
+        st.session_state.alav_aguardando_odds_manual = False
+        st.session_state.alav_jogos_com_odds_parcial = []
 
         if not confirmados:
-            st.error("❌ Nenhuma odd disponível (nem automática, nem manual). Tente novamente mais tarde.")
-            if st.button("🔄 Nova tentativa", use_container_width=True):
-                _resetar_alavancagem()
+            st.session_state.alav_ativa = False
+            st.warning("Nenhum jogo disponível para o bilhete. Tente rodar o pipeline novamente mais tarde.")
+            if st.button("🔄 Voltar para configuração", use_container_width=True):
                 st.rerun()
             return
+
+        # Tem pelo menos 1 jogo confirmado (automático + manual) — já
+        # inicia a alavancagem direto, igual acontece quando as odds
+        # vêm todas automáticas
+        st.session_state.alav_jogos = confirmados
 
         banca = st.session_state.alav_banca_inicial
         odd   = st.session_state.alav_odd_alvo
         total = st.session_state.alav_total_entradas
-
-        st.success(f"✅ {len(confirmados)} jogo(s) prontos (automáticos + manuais)!")
-        st.markdown("**🏆 Jogos prontos para o bilhete:**")
-        for j in confirmados:
-            st.markdown(
-                f"**#{j.get('score', 0)}/100** | {j['nome']} | {j.get('liga_nome', '')} | "
-                f"Mercado: **{j.get('ia_mercado', '')}** | "
-                f"Odd: {j.get('melhor_odd', '?')}"
-            )
-
-        if st.button("▶️ Iniciar Alavancagem com esses jogos", use_container_width=True):
-            tabela = calcular_tabela(banca, odd, int(total))
-            st.session_state.alav_entradas = tabela
-            st.session_state.alav_ativa = True
-            st.session_state.alav_entrada_atual = 0
-            st.rerun()
-        return
-
-    # Ainda tem jogo pendente — mostra o atual
-    jogo = pendentes[indice]
-    st.progress(indice / max(len(pendentes), 1))
-    st.markdown(f"**Jogo {indice + 1} de {len(pendentes)}**")
-
-    st.info(
-        f"**{jogo.get('nome', '')}** | {jogo.get('liga_nome', '')}\n\n"
-        f"Mercado sugerido pela IA: **{jogo.get('ia_mercado', '')}**\n\n"
-        f"Confiança da IA: {jogo.get('ia_confianca', 0)}/100\n\n"
-        f"Motivo: {jogo.get('ia_motivo', '')}"
-    )
-
-    odd_manual = st.number_input(
-        "Odd que você encontrou para esse mercado",
-        min_value=1.01, max_value=50.0, value=1.50, step=0.01,
-        key=f"odd_manual_{indice}"
-    )
-
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("✅ Confirmar odd", key=f"confirmar_odd_{indice}", use_container_width=True):
-            jogo["melhor_odd"] = float(odd_manual)
-            jogo["tem_odds"] = True
-            jogo["candidato_combinada"] = float(odd_manual) < st.session_state.alav_odd_min
-            confirmados.append(jogo)
-            st.session_state.alav_jogos_com_odds_parcial = confirmados
-            st.session_state.alav_indice_pendente = indice + 1
-            log_etapa("  ✋ odd manual: " + jogo.get("nome", "") + " @ " + str(odd_manual))
-            st.rerun()
-    with c2:
-        if st.button("⏭️ Pular esse jogo", key=f"pular_odd_{indice}", use_container_width=True):
-            log_etapa("  ⏭️ pulado (sem odd manual): " + jogo.get("nome", ""))
-            st.session_state.alav_indice_pendente = indice + 1
-            st.rerun()
-
-    st.markdown("---")
-    if st.button("🚪 Encerrar e usar só o que já tenho até agora", use_container_width=True):
-        st.session_state.alav_indice_pendente = len(pendentes)
+        tabela = calcular_tabela(banca, odd, int(total))
+        st.session_state.alav_entradas = tabela
+        st.session_state.alav_ativa = True
+        st.session_state.alav_entrada_atual = 0
         st.rerun()
+        return
 
 
 # ─────────────────────────────────────────────
