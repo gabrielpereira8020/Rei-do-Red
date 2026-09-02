@@ -47,3 +47,4 @@ jobs:
 
       - name: Rodar o radar
         run: python radar_ao_vivo_automatico.py
+# forçando reativação
