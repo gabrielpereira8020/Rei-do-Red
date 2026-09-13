@@ -12,6 +12,7 @@ except ImportError:
 from ao_vivo import tela_ao_vivo
 from pre_jogo import tela_pre_jogo
 from alavancagem import tela_alavancagem
+from bilhete_especial import tela_bilhete_especial
 
 # =====================================================
 # CONFIG
@@ -206,7 +207,7 @@ st.markdown("---")
 # =====================================================
 # TABS
 # =====================================================
-aba1, aba2, aba3 = st.tabs(["🔴 AO VIVO", "⚽ PRÉ-JOGO", "🚀 ALAVANCAGEM"])
+aba1, aba2, aba3, aba4 = st.tabs(["🔴 AO VIVO", "⚽ PRÉ-JOGO", "🚀 ALAVANCAGEM", "💎 BILHETE ESPECIAL"])
 
 with aba1:
     tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado)
@@ -216,4 +217,6 @@ with aba2:
 
 with aba3:
     tela_alavancagem(supabase=supabase)
-    
+
+with aba4:
+    tela_bilhete_especial()
