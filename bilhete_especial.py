@@ -262,7 +262,13 @@ def renderizar_analise_poisson(jogo):
         )
 
 
-
+def tela_bilhete_especial():
+    """
+    Tela principal do "Bilhete Especial do Dia". Busca as oportunidades
+    do dia usando o pipeline de alavancagem, calcula o valor de cada
+    uma contra a odd real do mercado e exibe os melhores achados em
+    cartões estilizados.
+    """
     st.subheader("💎 Bilhete Especial do Dia")
     st.caption(
         "Melhores oportunidades do dia, cruzando as estatísticas dos dois "
