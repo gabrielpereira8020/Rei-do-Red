@@ -1,6 +1,6 @@
 import streamlit as st
 
-from ligas import LIGAS
+from ligas import LIGAS, COMPETICOES_INTERNACIONAIS
 from api_football import buscar_jogos_da_liga
 from ia_engine import gerar_analise_pre_jogo
 from formatacao import exibir_analise
@@ -10,14 +10,21 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado):
 
     st.subheader("⚽ Análise Pré-Jogo")
 
-    # País
+    # Junta os campeonatos nacionais (LIGAS) com as competições
+    # internacionais (Champions, Europa League, Libertadores etc.),
+    # tratando "Internacional / Copas" como se fosse mais um "país"
+    # no seletor.
+    LIGAS_COMPLETO = dict(LIGAS)
+    LIGAS_COMPLETO["🌍 Internacional / Copas"] = COMPETICOES_INTERNACIONAIS
+
+    # País (ou "Internacional / Copas")
     pais = st.selectbox(
-        "🌍 Escolha o país",
-        list(LIGAS.keys())
+        "🌍 Escolha o país ou competição internacional",
+        list(LIGAS_COMPLETO.keys())
     )
 
     # Competições
-    competicoes = LIGAS[pais]
+    competicoes = LIGAS_COMPLETO[pais]
 
     campeonato = st.selectbox(
         "🏆 Escolha a competição",
@@ -124,4 +131,3 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado):
                 st.error(
                     f"Erro ao gerar análise: {erro}"
                 )
-                
