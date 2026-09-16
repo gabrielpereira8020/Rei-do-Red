@@ -33,9 +33,18 @@ SOBRE A "PROBABILIDADE JUSTA" USADA AQUI - LEIA ISSO:
   oddspapi_engine.py, que usa BOOKMAKER_PRINCIPAL = "pinnacle").
 """
 
+import re
 import streamlit as st
 
 from alavancagem import executar_pipeline_alavancagem
+from poisson_model import (
+    calcular_expectativas_jogo,
+    probabilidade_over,
+    escanear_linhas,
+    LINHAS_GOLS,
+    LINHAS_ESCANTEIOS,
+    LINHAS_CARTOES,
+)
 
 
 def calcular_valor(odd, confianca_ia_pct):
@@ -128,7 +137,132 @@ CSS_BILHETE = """
 """
 
 
-def tela_bilhete_especial():
+def _extrair_odd_para_linha_gols(jogo, linha, tipo):
+    """
+    Tenta achar a odd real de mercado pra uma linha específica de
+    gols (ex: Over 2.5 FT), usando o que já foi buscado no pipeline
+    (odds_dict pode ter vindo do OddsPapi ou do The Odds API).
+    Retorna None se não achar.
+    """
+    odds_dict = jogo.get("odds_dict")
+    if not odds_dict:
+        return None
+
+    mercado_str = f"{tipo} {linha} FT"
+
+    # Tenta como se fosse formato OddsPapi (dict com "mercados")
+    try:
+        if "mercados" in odds_dict:
+            from oddspapi_engine import extrair_odd_para_mercado
+            odd = extrair_odd_para_mercado(odds_dict, mercado_str, 1.01, 50.0)
+            if odd:
+                return odd
+    except Exception:
+        pass
+
+    # Tenta como se fosse formato The Odds API (dict com "bookmakers")
+    try:
+        if "bookmakers" in odds_dict:
+            from the_odds_api import extrair_melhor_odd_mercado
+            odd, _ = extrair_melhor_odd_mercado(odds_dict, mercado_str, 1.01, 50.0)
+            if odd:
+                return odd
+    except Exception:
+        pass
+
+    return None
+
+
+def renderizar_analise_poisson(jogo):
+    """
+    Roda o modelo estatístico (Poisson) pra esse jogo e mostra, dentro
+    de um expander, as melhores linhas de gols/escanteios/cartões.
+    Para gols, também tenta comparar com a odd real do mercado pra
+    confirmar se existe valor de verdade (não só probabilidade alta).
+    Para escanteios/cartões, mostra a expectativa estatística mesmo
+    sem odd de mercado pareada (deixamos isso bem claro no texto).
+    """
+    home_id = jogo.get("casa_id")
+    away_id = jogo.get("fora_id")
+    league_id = jogo.get("liga_id")
+    season = jogo.get("season", 2025)
+
+    if not home_id or not away_id or not league_id:
+        return
+
+    with st.spinner(f"Calculando modelo estatístico para {jogo.get('nome','')}..."):
+        expectativas = calcular_expectativas_jogo(home_id, away_id, league_id, season)
+
+    if not expectativas:
+        return
+
+    with st.expander(f"📐 Modelo estatístico (Poisson) — {jogo.get('nome','')}"):
+        st.caption(
+            "Isso é matemática de probabilidade baseada nas médias reais dos "
+            "times — não é opinião da IA. Veja as limitações no rodapé."
+        )
+
+        # ── GOLS: compara com odd real quando disponível ──
+        st.markdown("**⚽ Gols**")
+        gols_scan = escanear_linhas(expectativas["gols_total_esperado"], LINHAS_GOLS, "FT")
+        alguma_com_valor = False
+        for item in gols_scan[:4]:
+            partes = item["mercado"].split(" ")
+            tipo, linha = partes[0], float(partes[1])
+            odd_real = _extrair_odd_para_linha_gols(jogo, linha, tipo)
+            if odd_real:
+                prob_implicita = (1 / odd_real) * 100
+                diferenca = item["probabilidade_pct"] - prob_implicita
+                if diferenca >= 5:
+                    alguma_com_valor = True
+                    st.success(
+                        f"💎 {item['mercado']} — modelo estima {item['probabilidade_pct']}% de chance, "
+                        f"odd real @ {odd_real} (mercado implica {prob_implicita:.1f}%) → "
+                        f"**{diferenca:.0f}pp de valor**"
+                    )
+                else:
+                    st.caption(f"{item['mercado']} — modelo: {item['probabilidade_pct']}% | odd real @ {odd_real} (sem valor claro)")
+            else:
+                st.caption(f"{item['mercado']} — modelo estima {item['probabilidade_pct']}% (sem odd de mercado pra comparar)")
+
+        if not alguma_com_valor:
+            st.caption("Nenhuma linha de gols com valor confirmado contra o mercado agora.")
+
+        # ── ESCANTEIOS: só expectativa estatística, sem odd pareada ──
+        amostra = expectativas.get("amostra_escanteios_cartoes", 0)
+        st.markdown(f"**🚩 Escanteios** (baseado em {amostra} jogo(s) recentes de cada time)")
+        escanteios_scan = escanear_linhas(expectativas["escanteios_total_esperado"], LINHAS_ESCANTEIOS, "FT")
+        melhor_escanteio = escanteios_scan[0]
+        st.info(
+            f"Expectativa estatística: **{melhor_escanteio['mercado']}** "
+            f"({melhor_escanteio['probabilidade_pct']}% de chance pelo modelo). "
+            f"Total esperado no jogo: {expectativas['escanteios_total_esperado']} escanteios."
+        )
+
+        # ── CARTÕES: idem ──
+        st.markdown(f"**🟨 Cartões** (baseado em {amostra} jogo(s) recentes de cada time)")
+        cartoes_scan = escanear_linhas(expectativas["cartoes_total_esperado"], LINHAS_CARTOES, "FT")
+        melhor_cartao = cartoes_scan[0]
+        st.info(
+            f"Expectativa estatística: **{melhor_cartao['mercado']}** "
+            f"({melhor_cartao['probabilidade_pct']}% de chance pelo modelo). "
+            f"Total esperado no jogo: {expectativas['cartoes_total_esperado']} cartões."
+        )
+
+        if amostra < 5:
+            st.warning(
+                f"⚠️ Escanteios e cartões estão baseados em só {amostra} jogo(s) recentes "
+                "por time — amostra pequena, trate com mais cautela."
+            )
+
+        st.caption(
+            "Escanteios e cartões não têm odd de mercado comparada aqui (nossas "
+            "APIs de odds não cobrem esses mercados de forma confiável) — são só "
+            "a expectativa matemática, não uma confirmação de valor contra o mercado."
+        )
+
+
+
     st.subheader("💎 Bilhete Especial do Dia")
     st.caption(
         "Melhores oportunidades do dia, cruzando as estatísticas dos dois "
@@ -208,6 +342,8 @@ def tela_bilhete_especial():
 """,
             unsafe_allow_html=True
         )
+
+        renderizar_analise_poisson(j)
 
     with st.expander("ℹ️ Como o 'valor' é calculado?"):
         st.markdown(
