@@ -220,7 +220,7 @@ with aba1:
     tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado)
 
 with aba2:
-    tela_pre_jogo(enviar_telegram, salvar_resultado)
+    tela_pre_jogo(enviar_telegram, salvar_resultado, supabase=supabase)
 
 with aba3:
     tela_alavancagem(supabase=supabase)
