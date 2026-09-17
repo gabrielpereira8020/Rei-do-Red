@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .models import DecisionStatus, MarketAssessment
+from .models import DecisionStatus, MarketAssessment, MarketProbability, OddsQuote
 
 
 def decide(
@@ -52,6 +52,10 @@ def build_assessment(
     fair_odds: float | None,
     data_quality: float,
     model_quality: float,
+    min_edge: float = 0.04,
+    min_ev: float = 0.03,
+    min_data_quality: float = 0.75,
+    min_model_quality: float = 0.35,
 ) -> MarketAssessment:
     decision, reasons = decide(
         probability=probability,
@@ -59,6 +63,10 @@ def build_assessment(
         market_probability_devig=market_probability_devig,
         data_quality=data_quality,
         model_quality=model_quality,
+        min_edge=min_edge,
+        min_ev=min_ev,
+        min_data_quality=min_data_quality,
+        min_model_quality=min_model_quality,
     )
     edge = None if market_probability_devig is None else probability - market_probability_devig
     ev = None if offered_odds is None else (probability * offered_odds) - 1.0
@@ -75,4 +83,37 @@ def build_assessment(
         model_quality=model_quality,
         decision=decision,
         reasons=reasons,
+    )
+
+
+def assess_market(
+    *,
+    probability: MarketProbability,
+    quote: OddsQuote | None,
+    market_probability_devig: float | None,
+    data_quality: float,
+    model_quality: float,
+    min_edge: float = 0.04,
+    min_ev: float = 0.03,
+    min_data_quality: float = 0.75,
+    min_model_quality: float = 0.35,
+) -> MarketAssessment:
+    """Compatibility adapter used by the shadow runner.
+
+    Converts the typed market probability and optional odds quote into the
+    deterministic assessment contract used by Shadow mode.
+    """
+    return build_assessment(
+        market=probability.market,
+        selection=probability.selection,
+        probability=probability.probability,
+        offered_odds=None if quote is None else quote.decimal_odds,
+        market_probability_devig=market_probability_devig,
+        fair_odds=probability.fair_odds,
+        data_quality=data_quality,
+        model_quality=model_quality,
+        min_edge=min_edge,
+        min_ev=min_ev,
+        min_data_quality=min_data_quality,
+        min_model_quality=min_model_quality,
     )
