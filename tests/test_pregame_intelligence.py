@@ -11,6 +11,7 @@ from football_intelligence.models import (
     TeamProfile,
 )
 from football_intelligence.pregame_market import choose_best_prices
+from football_intelligence.shadow import run_shadow
 
 
 def _context() -> MatchContext:
@@ -102,3 +103,37 @@ def test_decision_requires_positive_edge_and_ev():
     assert assessment.edge is not None and assessment.edge > 0
     assert assessment.expected_value is not None and assessment.expected_value > 0
     assert assessment.decision in {DecisionStatus.BET_ELIGIBLE, DecisionStatus.WATCH}
+
+
+def test_run_shadow_uses_best_price_but_same_bookmaker_for_devig():
+    now = datetime.now(timezone.utc)
+    quotes = [
+        OddsQuote("A", "TOTAL_GOALS", "OVER", 2.05, now, 2.5),
+        OddsQuote("A", "TOTAL_GOALS", "UNDER", 1.80, now, 2.5),
+        OddsQuote("B", "TOTAL_GOALS", "OVER", 1.95, now, 2.5),
+        OddsQuote("B", "TOTAL_GOALS", "UNDER", 1.95, now, 2.5),
+    ]
+    snapshot = run_shadow(_context(), quotes, min_edge=-1.0, min_ev=-1.0)
+    over = next(
+        item for item in snapshot.assessments
+        if item.market == "TOTAL_GOALS" and item.selection == "OVER" and item.fair_odds is not None
+    )
+    assert over.offered_odds == 2.05
+    expected = proportional_devig({"OVER": 2.05, "UNDER": 1.80})["OVER"]
+    assert over.market_probability_devig is not None
+    assert abs(over.market_probability_devig - expected) < 1e-12
+
+
+def test_run_shadow_rejects_incomplete_book_for_devig():
+    now = datetime.now(timezone.utc)
+    quotes = [
+        OddsQuote("A", "TOTAL_GOALS", "OVER", 2.05, now, 2.5),
+        OddsQuote("B", "TOTAL_GOALS", "UNDER", 1.95, now, 2.5),
+    ]
+    snapshot = run_shadow(_context(), quotes)
+    over = next(
+        item for item in snapshot.assessments
+        if item.market == "TOTAL_GOALS" and item.selection == "OVER" and item.fair_odds is not None
+    )
+    assert over.offered_odds == 2.05
+    assert over.market_probability_devig is None
