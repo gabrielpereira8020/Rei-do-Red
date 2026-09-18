@@ -116,7 +116,7 @@ def test_run_shadow_uses_best_price_but_same_bookmaker_for_devig():
     snapshot = run_shadow(_context(), quotes, min_edge=-1.0, min_ev=-1.0)
     over = next(
         item for item in snapshot.assessments
-        if item.market == "TOTAL_GOALS" and item.selection == "OVER" and item.fair_odds is not None
+        if item.market == "TOTAL_GOALS" and item.selection == "OVER" and item.offered_odds is not None
     )
     assert over.offered_odds == 2.05
     expected = proportional_devig({"OVER": 2.05, "UNDER": 1.80})["OVER"]
@@ -133,7 +133,7 @@ def test_run_shadow_rejects_incomplete_book_for_devig():
     snapshot = run_shadow(_context(), quotes)
     over = next(
         item for item in snapshot.assessments
-        if item.market == "TOTAL_GOALS" and item.selection == "OVER" and item.fair_odds is not None
+        if item.market == "TOTAL_GOALS" and item.selection == "OVER" and item.offered_odds is not None
     )
     assert over.offered_odds == 2.05
     assert over.market_probability_devig is None
