@@ -9,7 +9,7 @@ import streamlit as st
 
 from football_intelligence.engine import FootballIntelligenceEngine
 from football_intelligence.pregame_adapter import build_match_context
-from football_intelligence.pregame_market import choose_best_prices, fetch_pregame_quotes
+from football_intelligence.pregame_market import fetch_pregame_quotes
 from football_intelligence.shadow import run_shadow
 from football_intelligence.supabase_shadow_store import SupabaseShadowSnapshotStore
 
@@ -147,7 +147,7 @@ def render_pregame_intelligence(
         quotes = []
         if odds_key:
             try:
-                quotes = choose_best_prices(fetch_pregame_quotes(jogo_info, odds_key))
+                quotes = fetch_pregame_quotes(jogo_info, odds_key)
             except Exception:
                 quotes = []
 
