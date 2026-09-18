@@ -19,7 +19,7 @@ from shadow_lab import tela_shadow_lab
 # CONFIG
 # =====================================================
 st.set_page_config(
-    page_title="IA REI DA BOLA PRO",
+    page_title="REI-DO-RED",
     page_icon="🏆",
     layout="wide"
 )
@@ -155,7 +155,7 @@ def salvar_resultado(jogo, resultado, confianca):
 # =====================================================
 # SIDEBAR
 # =====================================================
-st.sidebar.title("🏆 REI DA BOLA")
+st.sidebar.title("🏆 REI-DO-RED")
 st.sidebar.markdown("**Painel Premium**")
 st.sidebar.markdown("---")
 
@@ -195,13 +195,13 @@ st.sidebar.metric("📈 Winrate", str(winrate) + "%")
 st.sidebar.markdown("---")
 
 if st.sidebar.button("📲 Testar Telegram"):
-    ok = enviar_telegram("<b>🏆 REI DA BOLA</b> - Telegram OK!")
+    ok = enviar_telegram("<b>🏆 REI-DO-RED</b> - Telegram OK!")
     st.sidebar.success("✅ OK!") if ok else st.sidebar.error("❌ Falha.")
 
 # =====================================================
 # HEADER
 # =====================================================
-st.title("🏆 IA REI DA BOLA PRO")
+st.title("🏆 REI-DO-RED")
 st.caption("Radar inteligente para traders esportivos")
 st.markdown("---")
 
@@ -220,7 +220,7 @@ with aba1:
     tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado)
 
 with aba2:
-    tela_pre_jogo(enviar_telegram, salvar_resultado)
+    tela_pre_jogo(enviar_telegram, salvar_resultado, supabase=supabase)
 
 with aba3:
     tela_alavancagem(supabase=supabase)

@@ -8,6 +8,7 @@ from .exceptions import InsufficientDataError
 from .market import fair_odds
 from .models import IntelligenceResult, MarketProbability, MatchContext
 from .poisson import btts_yes, one_x_two, total_goals_over
+from .pregame_quality import assess_pregame_quality
 
 
 class FootballIntelligenceEngine:
@@ -52,6 +53,7 @@ class FootballIntelligenceEngine:
 
     def analyze(self, context: MatchContext) -> IntelligenceResult:
         lambda_home, lambda_away, model_quality = self._expected_goals(context)
+        quality_report = assess_pregame_quality(context)
         p_home, p_draw, p_away = one_x_two(lambda_home, lambda_away)
         total_lambda = lambda_home + lambda_away
         p_btts = btts_yes(lambda_home, lambda_away)
@@ -82,10 +84,6 @@ class FootballIntelligenceEngine:
         add("btts_yes", "BTTS", "YES", p_btts)
         add("btts_no", "BTTS", "NO", 1.0 - p_btts)
 
-        # Data quality is deliberately conservative at this stage. It reflects
-        # availability of the four core home/away averages, not predictive skill.
-        data_quality = 1.0
-
         return IntelligenceResult(
             fixture_id=context.fixture_id,
             model_name=self.name,
@@ -93,6 +91,6 @@ class FootballIntelligenceEngine:
             expected_home_goals=lambda_home,
             expected_away_goals=lambda_away,
             probabilities=probabilities,
-            data_quality=data_quality,
+            data_quality=quality_report.score,
             model_quality=model_quality,
         )

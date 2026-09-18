@@ -45,9 +45,23 @@ def _group_odds(quotes: Iterable[OddsQuote]) -> dict[tuple[str, Optional[float],
     return grouped
 
 
+def _expected_selection_count(market: str) -> int | None:
+    market = market.upper()
+    if market == "1X2":
+        return 3
+    if market in {"TOTAL_GOALS", "BTTS"}:
+        return 2
+    return None
+
+
 def _devig_lookup(quotes: Iterable[OddsQuote]) -> dict[tuple[str, str, Optional[float], str], float]:
     result: dict[tuple[str, str, Optional[float], str], float] = {}
     for (market, line, bookmaker), selections in _group_odds(quotes).items():
+        expected = _expected_selection_count(market)
+        if expected is not None and len(selections) != expected:
+            continue
+        if expected is None and len(selections) < 2:
+            continue
         try:
             fair = proportional_devig(selections)
         except ValueError:
@@ -68,13 +82,18 @@ def run_shadow(
 ) -> ShadowSnapshot:
     """Evaluate a match without side effects.
 
-    It does not send Telegram messages, write Supabase rows, place bets, or call Gemini.
-    The returned snapshot is suitable for later persistence by a separate adapter.
+    Complete bookmaker books are retained for de-vigging. The best available
+    offered price is selected separately for EV/edge evaluation.
     """
     base: IntelligenceResult = FootballIntelligenceEngine().analyze(context)
-    quote_map: dict[tuple[str, str, Optional[float]], OddsQuote] = {
-        _quote_key(q): q for q in odds
-    }
+
+    quote_map: dict[tuple[str, str, Optional[float]], OddsQuote] = {}
+    for quote in odds:
+        key = _quote_key(quote)
+        current = quote_map.get(key)
+        if current is None or quote.decimal_odds > current.decimal_odds:
+            quote_map[key] = quote
+
     devig_map = _devig_lookup(odds)
 
     assessments: list[MarketAssessment] = []
