@@ -157,7 +157,16 @@ def render_pregame_intelligence(
         persistence_error = None
         if supabase is not None:
             try:
-                SupabaseShadowSnapshotStore(supabase).save(shadow)
+                SupabaseShadowSnapshotStore(supabase).save(
+                    shadow,
+                    match_meta={
+                        "home_team": jogo_info.get("casa"),
+                        "away_team": jogo_info.get("fora"),
+                        "league_name": jogo_info.get("liga") or jogo_info.get("campeonato"),
+                        "kickoff": jogo_info.get("data"),
+                    },
+                    gemini_text=legacy_text,
+                )
                 persisted = True
             except Exception as exc:
                 persistence_error = str(exc)
