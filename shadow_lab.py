@@ -37,6 +37,15 @@ def _assessment_rows(snapshot_row):
     return rows
 
 
+def _fixture_label(row):
+    home = row.get("home_team")
+    away = row.get("away_team")
+    fixture_id = row.get("fixture_id")
+    if home and away:
+        return f"{home} x {away} — #{fixture_id}"
+    return f"Fixture #{fixture_id}"
+
+
 def tela_shadow_lab(supabase):
     st.subheader("🧪 SHADOW LAB")
     st.caption(
@@ -72,10 +81,38 @@ def tela_shadow_lab(supabase):
         )
         return
 
-    fixture_ids = sorted({int(row["fixture_id"]) for row in snapshots if row.get("fixture_id") is not None})
-    selected_fixture = st.selectbox("Fixture", fixture_ids, index=0)
-    fixture_rows = [row for row in snapshots if int(row.get("fixture_id", -1)) == int(selected_fixture)]
+    latest_by_fixture = {}
+    for row in snapshots:
+        fixture_id = row.get("fixture_id")
+        if fixture_id is None or fixture_id in latest_by_fixture:
+            continue
+        latest_by_fixture[fixture_id] = row
+
+    options = list(latest_by_fixture.keys())
+    labels = {fixture_id: _fixture_label(latest_by_fixture[fixture_id]) for fixture_id in options}
+    selected_fixture = st.selectbox(
+        "Jogo",
+        options,
+        index=0,
+        format_func=lambda fixture_id: labels.get(fixture_id, str(fixture_id)),
+    )
+
+    fixture_rows = [
+        row for row in snapshots
+        if int(row.get("fixture_id", -1)) == int(selected_fixture)
+    ]
     latest = fixture_rows[0]
+
+    home = latest.get("home_team")
+    away = latest.get("away_team")
+    league = latest.get("league_name")
+    kickoff = latest.get("kickoff")
+
+    if home and away:
+        st.markdown(f"### ⚽ {home} x {away}")
+        details = [part for part in (league, kickoff, f"Fixture #{selected_fixture}") if part]
+        if details:
+            st.caption(" • ".join(details))
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Fixture", str(selected_fixture))
@@ -87,6 +124,13 @@ def tela_shadow_lab(supabase):
     q1.metric("Qualidade dos dados", _pct(latest.get("data_quality")))
     q2.metric("Qualidade do modelo", _pct(latest.get("model_quality")))
     q3.metric("Snapshots", len(fixture_rows))
+
+    gemini_text = latest.get("gemini_text")
+    if gemini_text:
+        st.markdown("### 🧠 Opinião do Gemini salva")
+        st.text(gemini_text)
+    else:
+        st.caption("Este snapshot não possui uma análise do Gemini salva.")
 
     rows = _assessment_rows(latest)
     if rows:
@@ -109,6 +153,7 @@ def tela_shadow_lab(supabase):
             "xG fora": row.get("expected_away_goals"),
             "Dados": row.get("data_quality"),
             "Modelo": row.get("model_quality"),
+            "Gemini salvo": "Sim" if row.get("gemini_text") else "Não",
             "BET_ELIGIBLE": eligible,
             "WATCH": watch,
             "NO_BET": no_bet,
