@@ -1,6 +1,8 @@
 import streamlit as st
 from ia_engine import gerar_analise_ao_vivo
 from formatacao import exibir_analise_ao_vivo
+from football_intelligence.live_adapter import build_live_context
+from football_intelligence.live_engine import analyze_live
 
 LIGAS_ELITE = [
     71, 72, 73,
@@ -144,6 +146,34 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                         "pressao":   pressao
                     }
 
+                    jogo_info["liga_id"] = jogo["league"]["id"]
+                    jogo_info["season"] = jogo["league"].get("season") or 2026
+                    jogo_info["data"] = jogo["fixture"].get("date")
+                    jogo_info["gols_home"] = gols_home
+                    jogo_info["gols_away"] = gols_away
+
+                    live_context = build_live_context(jogo_info, stats)
+                    live_result = analyze_live(
+                        live_context,
+                        pregame_home_xg=live_context.league.home_goals_avg,
+                        pregame_away_xg=live_context.league.away_goals_avg,
+                    )
+
+                    st.markdown("#### 📡 Football Intelligence Ao Vivo")
+                    cfi1, cfi2, cfi3 = st.columns(3)
+                    cfi1.metric("Dados", f"{live_result.data_quality*100:.0f}%")
+                    cfi2.metric("Modelo", f"{live_result.model_quality*100:.0f}%")
+                    cfi3.metric("Pressão", f"{live_result.pressure_home:.0f} x {live_result.pressure_away:.0f}")
+
+                    st.caption(f"Restante projetado: {live_result.expected_remaining_corners:.2f} escanteios • {live_result.expected_remaining_cards:.2f} cartões")
+
+                    for signal in live_result.signals:
+                        fair_text = f"{signal.fair_odds:.2f}" if signal.fair_odds is not None else "—"
+                        st.write(
+                            f"**{signal.label}** — {signal.probability*100:.1f}% "
+                            f"| odd justa {fair_text} | {signal.status}"
+                        )
+
                     resposta = gerar_analise_ao_vivo(jogo_info)
                     exibir_analise_ao_vivo(
                         resposta,
@@ -158,12 +188,25 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     if c2.button("❌ RED", key="red_live_" + str(fixture_id)):
                         salvar_resultado(home + " x " + away, "RED", pressao)
 
+                    melhores = sorted(
+                        live_result.signals,
+                        key=lambda s: s.probability,
+                        reverse=True,
+                    )[:3]
+                    linhas_fi = "\n".join(
+                        f"• {s.label}: {s.probability*100:.1f}% | {s.status}"
+                        for s in melhores
+                    )
+
                     enviar_telegram(
-                        "<b>⚡ AO VIVO - REI DA BOLA</b>\n\n" +
-                        str(tempo) + "' | " + home + " " + str(gols_home) + "x" + str(gols_away) + " " + away + "\n" +
-                        "Liga: " + liga + "\n" +
-                        "Pressão: " + str(pressao) + "\n\n" +
-                        resposta[:800]
+                        "<b>⚡ AO VIVO - REI-DO-RED</b>\n\n"
+                        + str(tempo) + "' | " + home + " " + str(gols_home) + "x" + str(gols_away) + " " + away + "\n"
+                        + "Liga: " + liga + "\n"
+                        + "Pressão: " + str(pressao) + "\n\n"
+                        + "<b>📡 Football Intelligence</b>\n"
+                        + linhas_fi + "\n\n"
+                        + "<b>🧠 Gemini</b>\n"
+                        + resposta[:700]
                     )
 
                     

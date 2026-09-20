@@ -137,3 +137,52 @@ def test_run_shadow_rejects_incomplete_book_for_devig():
     )
     assert over.offered_odds == 2.05
     assert over.market_probability_devig is None
+
+
+def test_live_intelligence_modules_exist():
+    from pathlib import Path
+    assert Path("football_intelligence/live_engine.py").exists()
+    assert Path("football_intelligence/live_adapter.py").exists()
+    live_engine = Path("football_intelligence/live_engine.py").read_text(encoding="utf-8")
+    radar = Path("radar_ao_vivo_automatico.py").read_text(encoding="utf-8")
+    assert "def analyze_live" in live_engine
+    assert "Football Intelligence" in radar
+    assert "REI-DO-RED" in radar
+
+
+def test_live_engine_includes_corners_and_cards_signals():
+    from datetime import datetime, timezone
+    from football_intelligence.live_engine import analyze_live
+    from football_intelligence.models import LeagueBaseline, LiveState, MatchContext, TeamProfile
+
+    ctx = MatchContext(
+        fixture_id=999,
+        league_id=39,
+        season=2026,
+        kickoff_utc=datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc),
+        home=TeamProfile(team_id=1, name="Home", home_goals_for_avg=1.5, home_goals_against_avg=1.0, matches_sample=20),
+        away=TeamProfile(team_id=2, name="Away", away_goals_for_avg=1.2, away_goals_against_avg=1.4, matches_sample=20),
+        league=LeagueBaseline(league_id=39, season=2026, home_goals_avg=1.5, away_goals_avg=1.2),
+        live=LiveState(
+            minute=60,
+            home_goals=1,
+            away_goals=0,
+            home_shots=10,
+            away_shots=7,
+            home_shots_on_target=4,
+            away_shots_on_target=2,
+            home_corners=5,
+            away_corners=3,
+            home_cards=2,
+            away_cards=1,
+            home_fouls=8,
+            away_fouls=10,
+        ),
+    )
+
+    result = analyze_live(ctx, 1.5, 1.2)
+    keys = {s.key for s in result.signals}
+    assert "two_more_corners" in keys
+    assert "one_more_card" in keys
+    assert result.expected_remaining_corners >= 0
+    assert result.expected_remaining_cards >= 0
