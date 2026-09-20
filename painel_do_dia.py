@@ -14,6 +14,7 @@ import streamlit as st
 
 from api_football import buscar_jogos_da_liga
 from football_intelligence.engine import FootballIntelligenceEngine
+from football_intelligence.alternative_markets import estimate_corners_and_cards
 from football_intelligence.pregame_adapter import build_match_context
 from football_intelligence.pregame_market import fetch_pregame_quotes
 from football_intelligence.shadow import run_shadow
@@ -104,6 +105,10 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
     shadow = run_shadow(context, quotes)
     candidate = _best_candidate(shadow)
 
+    alternatives = estimate_corners_and_cards(jogo)
+    best_corners = max((v for v in alternatives.values() if v.market == "TOTAL_CORNERS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
+    best_cards = max((v for v in alternatives.values() if v.market == "TOTAL_CARDS" && v.probability_over is not None), key=lambda x: x.probability_over, default=None)
+
     return {
         "fixture_id": jogo.get("id"),
         "game": jogo.get("nome"),
@@ -120,6 +125,9 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
         "model_quality": result.model_quality,
         "candidate": candidate,
         "status": candidate.decision.value if candidate is not None else "NO_MARKET",
+        "alternatives": alternatives,
+        "best_corners": best_corners,
+        "best_cards": best_cards,
     }
 
 
@@ -254,15 +262,63 @@ def tela_painel_do_dia() -> None:
     }[sort_mode]
     filtered.sort(key=sort_key, reverse=True)
 
-    tab_res, tab_alt = st.tabs(["⚽ Resultado & Gols", "🎯 Alternativos — em construção"])
+    tab_res, tab_corners, tab_cards = st.tabs(["⚽ Resultado & Gols", "🚩 Escanteios", "🟨 Cartões"])
 
     with tab_res:
         for row in filtered:
             _render_match_card(row)
 
-    with tab_alt:
-        st.info(
-            "Próxima etapa: escanteios, cartões, chutes de jogadores, chutes no gol, "
-            "defesas do goleiro e contexto disciplinar em modelos separados. "
-            "Eles usarão o mesmo scanner e aparecerão aqui sem misturar métricas."
-        )
+    with tab_corners:
+        for row in filtered:
+            item = row.get("best_corners")
+            if item is None:
+                continue
+            st.markdown(f"### 🚩 {row['game']}")
+            st.caption(f"{row['league']} • amostra recente: {item.sample_size} jogos por lado")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Projeção escanteios", _fmt_num(item.expected))
+            c2.metric(f"Over {item.line}", _fmt_pct(item.probability_over))
+            c3.metric("Qualidade", _fmt_pct(item.quality))
+            c4.metric("Linha", str(item.line))
+            with st.expander("Ver linhas de escanteios"):
+                rows_alt = []
+                for alt in row.get("alternatives", {}).values():
+                    if alt.market != "TOTAL_CORNERS":
+                        continue
+                    rows_alt.append({
+                        "Mercado": f"Over {alt.line}",
+                        "Projeção": _fmt_num(alt.expected),
+                        "Probabilidade": _fmt_pct(alt.probability_over),
+                        "Amostra": alt.sample_size,
+                        "Qualidade": _fmt_pct(alt.quality),
+                    })
+                st.dataframe(rows_alt, use_container_width=True, hide_index=True)
+            st.markdown("---")
+
+    with tab_cards:
+        for row in filtered:
+            item = row.get("best_cards")
+            if item is None:
+                continue
+            st.markdown(f"### 🟨 {row['game']}")
+            st.caption(f"{row['league']} • amostra recente: {item.sample_size} jogos por lado")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Projeção cartões", _fmt_num(item.expected))
+            c2.metric(f"Over {item.line}", _fmt_pct(item.probability_over))
+            c3.metric("Qualidade", _fmt_pct(item.quality))
+            c4.metric("Linha", str(item.line))
+            with st.expander("Ver linhas de cartões"):
+                rows_alt = []
+                for alt in row.get("alternatives", {}).values():
+                    if alt.market != "TOTAL_CARDS":
+                        continue
+                    rows_alt.append({
+                        "Mercado": f"Over {alt.line}",
+                        "Projeção": _fmt_num(alt.expected),
+                        "Probabilidade": _fmt_pct(alt.probability_over),
+                        "Amostra": alt.sample_size,
+                        "Qualidade": _fmt_pct(alt.quality),
+                    })
+                st.dataframe(rows_alt, use_container_width=True, hide_index=True)
+            st.caption("Baseline estatístico inicial. Ainda não incorpora árbitro, suspensão ou jogador pendurado.")
+            st.markdown("---")
