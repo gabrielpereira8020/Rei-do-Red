@@ -160,3 +160,31 @@ def estimate_corners_and_cards(jogo: dict, recent_matches: int = 8) -> dict[str,
         )
 
     return output
+
+
+def hit_rate(values: list[float], line: float) -> float | None:
+    if not values:
+        return None
+    return sum(1 for value in values if value > line) / len(values)
+
+
+def recent_market_profile(jogo: dict, recent_matches: int = 10) -> dict:
+    """Return recent L5/L10 profiles for corners and cards for scanner display."""
+    home_id = jogo.get("casa_id")
+    away_id = jogo.get("fora_id")
+    if not home_id or not away_id:
+        return {}
+
+    home_corners, home_cards = _collect_team_totals(int(home_id), limit=recent_matches)
+    away_corners, away_cards = _collect_team_totals(int(away_id), limit=recent_matches)
+
+    return {
+        "corners": {
+            "home": home_corners,
+            "away": away_corners,
+        },
+        "cards": {
+            "home": home_cards,
+            "away": away_cards,
+        },
+    }
