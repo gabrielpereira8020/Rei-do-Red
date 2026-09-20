@@ -14,7 +14,7 @@ import streamlit as st
 
 from api_football import buscar_jogos_da_liga
 from football_intelligence.engine import FootballIntelligenceEngine
-from football_intelligence.alternative_markets import estimate_corners_and_cards
+from football_intelligence.alternative_markets import estimate_corners_and_cards, recent_market_profile, hit_rate
 from football_intelligence.pregame_adapter import build_match_context
 from football_intelligence.pregame_market import fetch_pregame_quotes
 from football_intelligence.shadow import run_shadow
@@ -106,6 +106,7 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
     candidate = _best_candidate(shadow)
 
     alternatives = estimate_corners_and_cards(jogo)
+    recent_profile = recent_market_profile(jogo)
     best_corners = max((v for v in alternatives.values() if v.market == "TOTAL_CORNERS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
     best_cards = max((v for v in alternatives.values() if v.market == "TOTAL_CARDS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
 
@@ -128,6 +129,7 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
         "alternatives": alternatives,
         "best_corners": best_corners,
         "best_cards": best_cards,
+        "recent_profile": recent_profile,
     }
 
 
@@ -280,6 +282,14 @@ def tela_painel_do_dia() -> None:
             c2.metric(f"Over {item.line}", _fmt_pct(item.probability_over))
             c3.metric("Qualidade", _fmt_pct(item.quality))
             c4.metric("Linha", str(item.line))
+            profile = row.get("recent_profile", {}).get("corners", {})
+            home_vals = profile.get("home", [])
+            away_vals = profile.get("away", [])
+            hr1, hr2, hr3, hr4 = st.columns(4)
+            hr1.metric("Casa L5", _fmt_pct(hit_rate(home_vals[:5], item.line)))
+            hr2.metric("Casa L10", _fmt_pct(hit_rate(home_vals[:10], item.line)))
+            hr3.metric("Fora L5", _fmt_pct(hit_rate(away_vals[:5], item.line)))
+            hr4.metric("Fora L10", _fmt_pct(hit_rate(away_vals[:10], item.line)))
             with st.expander("Ver linhas de escanteios"):
                 rows_alt = []
                 for alt in row.get("alternatives", {}).values():
@@ -307,6 +317,14 @@ def tela_painel_do_dia() -> None:
             c2.metric(f"Over {item.line}", _fmt_pct(item.probability_over))
             c3.metric("Qualidade", _fmt_pct(item.quality))
             c4.metric("Linha", str(item.line))
+            profile = row.get("recent_profile", {}).get("cards", {})
+            home_vals = profile.get("home", [])
+            away_vals = profile.get("away", [])
+            hr1, hr2, hr3, hr4 = st.columns(4)
+            hr1.metric("Casa L5", _fmt_pct(hit_rate(home_vals[:5], item.line)))
+            hr2.metric("Casa L10", _fmt_pct(hit_rate(home_vals[:10], item.line)))
+            hr3.metric("Fora L5", _fmt_pct(hit_rate(away_vals[:5], item.line)))
+            hr4.metric("Fora L10", _fmt_pct(hit_rate(away_vals[:10], item.line)))
             with st.expander("Ver linhas de cartões"):
                 rows_alt = []
                 for alt in row.get("alternatives", {}).values():
