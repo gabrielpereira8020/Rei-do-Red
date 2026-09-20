@@ -33,6 +33,8 @@ class LiveIntelligenceResult:
     pressure_away: float
     remaining_home_goals: float
     remaining_away_goals: float
+    expected_remaining_corners: float
+    expected_remaining_cards: float
     data_quality: float
     model_quality: float
     signals: tuple[LiveMarketSignal, ...]
@@ -116,6 +118,34 @@ def analyze_live(context: MatchContext, pregame_home_xg: float, pregame_away_xg:
     p_home_goal = _prob_at_least(rem_home, 1)
     p_away_goal = _prob_at_least(rem_away, 1)
 
+    current_corners = int((live.home_corners or 0) + (live.away_corners or 0))
+    current_cards = int((live.home_cards or 0) + (live.away_cards or 0))
+    current_fouls = int((live.home_fouls or 0) + (live.away_fouls or 0))
+
+    elapsed_fraction = max(0.12, min(minute, 90) / 90.0)
+    observed_corner_rate = current_corners / elapsed_fraction if current_corners > 0 else 0.0
+    observed_card_rate = current_cards / elapsed_fraction if current_cards > 0 else 0.0
+
+    corner_pressure_boost = 1.0 + min(0.35, (pressure_home + pressure_away) / 220.0)
+    trailing_boost = 1.08 if home_goals != away_goals else 1.0
+    expected_remaining_corners = max(
+        0.0,
+        observed_corner_rate * remaining_fraction * corner_pressure_boost * trailing_boost,
+    )
+
+    foul_intensity = min(1.5, current_fouls / max(1.0, minute / 8.0))
+    card_intensity_boost = 1.0 + min(0.45, foul_intensity * 0.20)
+    expected_remaining_cards = max(
+        0.0,
+        observed_card_rate * remaining_fraction * card_intensity_boost,
+    )
+
+    p_one_corner = _prob_at_least(expected_remaining_corners, 1)
+    p_two_corners = _prob_at_least(expected_remaining_corners, 2)
+    p_three_corners = _prob_at_least(expected_remaining_corners, 3)
+    p_one_card = _prob_at_least(expected_remaining_cards, 1)
+    p_two_cards = _prob_at_least(expected_remaining_cards, 2)
+
     signals = (
         LiveMarketSignal(
             "next_goal_any", "Sai pelo menos 1 gol", p_goal, _fair_odds(p_goal),
@@ -137,6 +167,31 @@ def analyze_live(context: MatchContext, pregame_home_xg: float, pregame_away_xg:
             _status(p_away_goal, data_quality, model_quality),
             f"Pressão relativa fora: {share_away:.0%}",
         ),
+        LiveMarketSignal(
+            "one_more_corner", "Sai pelo menos 1 escanteio", p_one_corner, _fair_odds(p_one_corner),
+            _status(p_one_corner, data_quality, model_quality),
+            f"Restante esperado de escanteios: {expected_remaining_corners:.2f}",
+        ),
+        LiveMarketSignal(
+            "two_more_corners", "Saem pelo menos 2 escanteios", p_two_corners, _fair_odds(p_two_corners),
+            _status(p_two_corners, data_quality, model_quality),
+            f"Restante esperado de escanteios: {expected_remaining_corners:.2f}",
+        ),
+        LiveMarketSignal(
+            "three_more_corners", "Saem pelo menos 3 escanteios", p_three_corners, _fair_odds(p_three_corners),
+            _status(p_three_corners, data_quality, model_quality),
+            f"Restante esperado de escanteios: {expected_remaining_corners:.2f}",
+        ),
+        LiveMarketSignal(
+            "one_more_card", "Sai pelo menos 1 cartão", p_one_card, _fair_odds(p_one_card),
+            _status(p_one_card, data_quality, model_quality),
+            f"Restante esperado de cartões: {expected_remaining_cards:.2f}",
+        ),
+        LiveMarketSignal(
+            "two_more_cards", "Saem pelo menos 2 cartões", p_two_cards, _fair_odds(p_two_cards),
+            _status(p_two_cards, data_quality, model_quality),
+            f"Restante esperado de cartões: {expected_remaining_cards:.2f}",
+        ),
     )
 
     return LiveIntelligenceResult(
@@ -148,6 +203,8 @@ def analyze_live(context: MatchContext, pregame_home_xg: float, pregame_away_xg:
         pressure_away=pressure_away,
         remaining_home_goals=rem_home,
         remaining_away_goals=rem_away,
+        expected_remaining_corners=expected_remaining_corners,
+        expected_remaining_cards=expected_remaining_cards,
         data_quality=data_quality,
         model_quality=model_quality,
         signals=signals,
