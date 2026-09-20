@@ -32,6 +32,21 @@ LIGAS = {
         "Liga Profesional": 128,
         "Primera Nacional": 129
     },
+    "Holanda": {
+        "Eredivisie": 88
+    },
+    "Belgica": {
+        "Jupiler Pro League": 144
+    },
+    "Austria": {
+        "Bundesliga": 218
+    },
+    "Suica": {
+        "Super League": 207
+    },
+    "Turquia": {
+        "Super Lig": 203
+    },
     "Estados Unidos": {
         "MLS": 253,
         "USL Championship": 254

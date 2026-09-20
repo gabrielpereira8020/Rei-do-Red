@@ -186,3 +186,13 @@ def test_live_engine_includes_corners_and_cards_signals():
     assert "one_more_card" in keys
     assert result.expected_remaining_corners >= 0
     assert result.expected_remaining_cards >= 0
+
+
+def test_expanded_leagues_are_available():
+    from ligas import LIGAS
+    assert LIGAS["Argentina"]["Liga Profesional"] == 128
+    assert LIGAS["Holanda"]["Eredivisie"] == 88
+    assert LIGAS["Belgica"]["Jupiler Pro League"] == 144
+    assert LIGAS["Austria"]["Bundesliga"] == 218
+    assert LIGAS["Suica"]["Super League"] == 207
+    assert LIGAS["Turquia"]["Super Lig"] == 203
