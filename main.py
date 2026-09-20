@@ -14,6 +14,7 @@ from pre_jogo import tela_pre_jogo
 from alavancagem import tela_alavancagem
 from bilhete_especial import tela_bilhete_especial
 from shadow_lab import tela_shadow_lab
+from painel_do_dia import tela_painel_do_dia
 
 # =====================================================
 # CONFIG
@@ -208,13 +209,17 @@ st.markdown("---")
 # =====================================================
 # TABS
 # =====================================================
-aba1, aba2, aba3, aba4, aba5 = st.tabs([
+aba0, aba1, aba2, aba3, aba4, aba5 = st.tabs([
+    "📊 PAINEL DO DIA",
     "🔴 AO VIVO",
     "⚽ PRÉ-JOGO",
     "🚀 ALAVANCAGEM",
     "💎 BILHETE ESPECIAL",
     "🧪 SHADOW LAB",
 ])
+
+with aba0:
+    tela_painel_do_dia()
 
 with aba1:
     tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado)
