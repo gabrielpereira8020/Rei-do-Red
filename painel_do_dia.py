@@ -87,7 +87,8 @@ def _best_candidate(shadow):
 def _candidate_label(item) -> str:
     if item is None:
         return "Sem candidato"
-    line = "" if item.line is None else f" {item.line}"
+    item_line = getattr(item, "line", None)
+    line = "" if item_line is None else f" {item_line}"
     return f"{item.market} • {item.selection}{line}"
 
 
@@ -163,9 +164,9 @@ def _render_match_card(row: dict) -> None:
         st.markdown(f"**Destaque atual:** {_candidate_label(candidate)}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("P modelo", _fmt_pct(candidate.probability))
-        m2.metric("Odd justa", _fmt_num(candidate.fair_odds))
-        m3.metric("Odd mercado", _fmt_num(candidate.offered_odds))
-        m4.metric("EV", _fmt_pct(candidate.expected_value))
+        m2.metric("Odd justa", _fmt_num(getattr(candidate, "fair_odds", None)))
+        m3.metric("Odd mercado", _fmt_num(getattr(candidate, "offered_odds", None)))
+        m4.metric("EV", _fmt_pct(getattr(candidate, "expected_value", None)))
 
     with st.expander("Ver probabilidades do jogo"):
         st.dataframe(

@@ -40,3 +40,7 @@ def test_player_props_wired():
     assert "GOALKEEPER_SAVES" in props
     assert "🎯 Jogadores" in panel
     assert "estimate_player_props" in panel
+
+def test_candidate_label_tolerates_market_assessment_without_line():
+    panel = Path("painel_do_dia.py").read_text(encoding="utf-8")
+    assert 'getattr(item, "line", None)' in panel
