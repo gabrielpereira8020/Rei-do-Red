@@ -137,3 +137,14 @@ def test_run_shadow_rejects_incomplete_book_for_devig():
     )
     assert over.offered_odds == 2.05
     assert over.market_probability_devig is None
+
+
+def test_live_intelligence_modules_exist():
+    from pathlib import Path
+    assert Path("football_intelligence/live_engine.py").exists()
+    assert Path("football_intelligence/live_adapter.py").exists()
+    live_engine = Path("football_intelligence/live_engine.py").read_text(encoding="utf-8")
+    radar = Path("radar_ao_vivo_automatico.py").read_text(encoding="utf-8")
+    assert "def analyze_live" in live_engine
+    assert "Football Intelligence" in radar
+    assert "REI-DO-RED" in radar
