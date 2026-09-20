@@ -107,7 +107,7 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
 
     alternatives = estimate_corners_and_cards(jogo)
     best_corners = max((v for v in alternatives.values() if v.market == "TOTAL_CORNERS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
-    best_cards = max((v for v in alternatives.values() if v.market == "TOTAL_CARDS" && v.probability_over is not None), key=lambda x: x.probability_over, default=None)
+    best_cards = max((v for v in alternatives.values() if v.market == "TOTAL_CARDS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
 
     return {
         "fixture_id": jogo.get("id"),
