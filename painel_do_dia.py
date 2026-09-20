@@ -16,6 +16,7 @@ from api_football import buscar_jogos_da_liga
 from football_intelligence.engine import FootballIntelligenceEngine
 from football_intelligence.alternative_markets import estimate_corners_and_cards, recent_market_profile, hit_rate
 from football_intelligence.pregame_adapter import build_match_context
+from football_intelligence.player_props import estimate_player_props, best_player_props
 from football_intelligence.pregame_market import fetch_pregame_quotes
 from football_intelligence.shadow import run_shadow
 from ligas import LIGAS, COMPETICOES_INTERNACIONAIS
@@ -110,6 +111,8 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
     best_corners = max((v for v in alternatives.values() if v.market == "TOTAL_CORNERS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
     best_cards = max((v for v in alternatives.values() if v.market == "TOTAL_CARDS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
 
+    player_props = best_player_props(estimate_player_props(jogo))
+
     return {
         "fixture_id": jogo.get("id"),
         "game": jogo.get("nome"),
@@ -130,6 +133,7 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
         "best_corners": best_corners,
         "best_cards": best_cards,
         "recent_profile": recent_profile,
+        "player_props": player_props,
     }
 
 
@@ -264,7 +268,7 @@ def tela_painel_do_dia() -> None:
     }[sort_mode]
     filtered.sort(key=sort_key, reverse=True)
 
-    tab_res, tab_corners, tab_cards = st.tabs(["⚽ Resultado & Gols", "🚩 Escanteios", "🟨 Cartões"])
+    tab_res, tab_corners, tab_cards, tab_players = st.tabs(["⚽ Resultado & Gols", "🚩 Escanteios", "🟨 Cartões", "🎯 Jogadores"])
 
     with tab_res:
         for row in filtered:
@@ -340,3 +344,35 @@ def tela_painel_do_dia() -> None:
                 st.dataframe(rows_alt, use_container_width=True, hide_index=True)
             st.caption("Baseline estatístico inicial. Ainda não incorpora árbitro, suspensão ou jogador pendurado.")
             st.markdown("---")
+
+    with tab_players:
+        for row in filtered:
+            props = row.get("player_props") or []
+            if not props:
+                continue
+            st.markdown(f"### 🎯 {row['game']}")
+            st.caption(f"{row['league']} • props calculadas a partir de jogos recentes e minutos efetivamente jogados")
+            prop_rows = []
+            for item in props:
+                market_label = {
+                    "PLAYER_SHOTS": "Chutes",
+                    "PLAYER_SHOTS_ON_TARGET": "Chutes no gol",
+                    "GOALKEEPER_SAVES": "Defesas",
+                }.get(item.market, item.market)
+                prop_rows.append({
+                    "Jogador": item.player_name,
+                    "Time": item.team_name,
+                    "Mercado": market_label,
+                    "Linha": f"Over {item.line}",
+                    "Projeção": _fmt_num(item.expected),
+                    "Probabilidade": _fmt_pct(item.probability_over),
+                    "Amostra": item.sample_size,
+                    "Qualidade": _fmt_pct(item.quality),
+                })
+            st.dataframe(prop_rows, use_container_width=True, hide_index=True)
+            st.caption(
+                "Baseline inicial: ainda não usa escalação confirmada, adversário por função, lesões, "
+                "marcação individual, árbitro ou odds específicas de jogador."
+            )
+            st.markdown("---")
+
