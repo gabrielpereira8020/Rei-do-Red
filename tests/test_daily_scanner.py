@@ -31,3 +31,12 @@ def test_recent_hit_rate_helpers_present():
     assert "def recent_market_profile" in engine
     assert "Casa L5" in panel
     assert "Fora L10" in panel
+
+def test_player_props_wired():
+    props = Path("football_intelligence/player_props.py").read_text(encoding="utf-8")
+    panel = Path("painel_do_dia.py").read_text(encoding="utf-8")
+    assert "PLAYER_SHOTS" in props
+    assert "PLAYER_SHOTS_ON_TARGET" in props
+    assert "GOALKEEPER_SAVES" in props
+    assert "🎯 Jogadores" in panel
+    assert "estimate_player_props" in panel
