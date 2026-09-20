@@ -53,15 +53,19 @@ def _prob_at_least(lam: float, n: int) -> float:
 
 
 def _status(probability: float, data_quality: float, model_quality: float) -> str:
-    if data_quality < 0.60:
+    if data_quality < 0.70:
         return "INSUFFICIENT_DATA"
-    if model_quality < 0.35:
+    if model_quality < 0.50:
         return "WATCH"
-    if probability >= 0.72:
-        return "STRONG_WATCH"
-    if probability >= 0.60:
+    if probability >= 0.78:
+        return "SIGNAL"
+    if probability >= 0.68:
         return "WATCH"
     return "NO_BET"
+
+
+def signal_is_actionable(signal: LiveMarketSignal) -> bool:
+    return signal.status == "SIGNAL"
 
 
 def _pressure_score(shots: int | None, sot: int | None, corners: int | None) -> float:
