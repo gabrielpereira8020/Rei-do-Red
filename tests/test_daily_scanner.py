@@ -23,3 +23,11 @@ def test_alternative_markets_wired():
     assert "TOTAL_CARDS" in engine
     assert "Escanteios" in panel
     assert "Cartões" in panel
+
+def test_recent_hit_rate_helpers_present():
+    engine = Path("football_intelligence/alternative_markets.py").read_text(encoding="utf-8")
+    panel = Path("painel_do_dia.py").read_text(encoding="utf-8")
+    assert "def hit_rate" in engine
+    assert "def recent_market_profile" in engine
+    assert "Casa L5" in panel
+    assert "Fora L10" in panel
