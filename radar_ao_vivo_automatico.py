@@ -46,7 +46,7 @@ from supabase import create_client
 from api_football import _get  # reaproveita o rate limiter já configurado
 from ia_engine import gerar_analise_ao_vivo
 from football_intelligence.live_adapter import build_live_context
-from football_intelligence.live_engine import analyze_live
+from football_intelligence.live_engine import analyze_live, signal_is_actionable
 
 
 # ─────────────────────────────────────────────
@@ -468,32 +468,38 @@ def rodar_radar():
                     pregame_away_xg=live_context.league.away_goals_avg,
                 )
 
-                resposta = gerar_analise_ao_vivo(jogo_info)
-                texto_gatilhos = "\n".join(f"- {m}" for m in motivos)
-                top_signals = sorted(
-                    live_result.signals,
-                    key=lambda s: s.probability,
-                    reverse=True,
-                )[:3]
-                linhas_fi = "\n".join(
-                    f"• {s.label}: {s.probability*100:.1f}% | {s.status}"
-                    for s in top_signals
-                )
+                actionable = [s for s in live_result.signals if signal_is_actionable(s)]
 
-                enviar_telegram(
-                    "<b>⚡ RADAR AO VIVO - REI-DO-RED</b>\n\n"
-                    f"{texto_gatilhos}\n\n"
-                    f"{tempo}' | {home} {gols_home}x{gols_away} {away}\n"
-                    f"Liga: {liga}\n"
-                    f"Pressão: {pressao}\n\n"
-                    "<b>📡 Football Intelligence</b>\n"
-                    f"{linhas_fi}\n"
-                    f"Dados: {live_result.data_quality*100:.0f}% | Modelo: {live_result.model_quality*100:.0f}%\n\n"
-                    "<b>🧠 Gemini</b>\n"
-                    f"{resposta[:700]}"
-                )
-                ultimo_alerta_ts = datetime.now(timezone.utc).isoformat()
-                log("  alerta enviado pro Telegram.")
+                if actionable:
+                    resposta = gerar_analise_ao_vivo(jogo_info)
+                    texto_gatilhos = "\n".join(f"- {m}" for m in motivos)
+                    top_signals = sorted(
+                        actionable,
+                        key=lambda s: s.probability,
+                        reverse=True,
+                    )[:3]
+                    linhas_fi = "\n".join(
+                        f"• {s.label}: {s.probability*100:.1f}% | odd justa "
+                        f"{(f'{s.fair_odds:.2f}' if s.fair_odds is not None else '—')}"
+                        for s in top_signals
+                    )
+
+                    enviar_telegram(
+                        "<b>⚡ SINAL AO VIVO - REI-DO-RED</b>\n\n"
+                        f"{texto_gatilhos}\n\n"
+                        f"{tempo}' | {home} {gols_home}x{gols_away} {away}\n"
+                        f"Liga: {liga}\n"
+                        f"Pressão: {pressao}\n\n"
+                        "<b>📡 Football Intelligence</b>\n"
+                        f"{linhas_fi}\n"
+                        f"Dados: {live_result.data_quality*100:.0f}% | Modelo: {live_result.model_quality*100:.0f}%\n\n"
+                        "<b>🧠 Gemini</b>\n"
+                        f"{resposta[:700]}"
+                    )
+                    ultimo_alerta_ts = datetime.now(timezone.utc).isoformat()
+                    log("  sinal qualificado enviado pro Telegram.")
+                else:
+                    log("  gatilho detectado, mas nenhum sinal passou o filtro forte. Telegram não enviado.")
             except Exception as e:
                 log(f"  erro ao gerar analise/enviar alerta: {e}")
 
