@@ -165,6 +165,8 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                     cfi2.metric("Modelo", f"{live_result.model_quality*100:.0f}%")
                     cfi3.metric("Pressão", f"{live_result.pressure_home:.0f} x {live_result.pressure_away:.0f}")
 
+                    st.caption(f"Restante projetado: {live_result.expected_remaining_corners:.2f} escanteios • {live_result.expected_remaining_cards:.2f} cartões")
+
                     for signal in live_result.signals:
                         fair_text = f"{signal.fair_odds:.2f}" if signal.fair_odds is not None else "—"
                         st.write(
