@@ -184,10 +184,8 @@ def build_pregame_value_combos(
     combos = []
     for size in range(2, max_legs + 1):
         for legs in combinations(pool, size):
-            fixture_ids = {leg.fixture_id for leg in legs}
-            if len(fixture_ids) != size:
-                continue
-
+            # Pré-jogo permite múltiplas pernas do mesmo jogo.
+            # A seleção continua restrita a pernas individualmente BET_ELIGIBLE.
             combined_odds = 1.0
             combined_probability = 1.0
             for leg in legs:
