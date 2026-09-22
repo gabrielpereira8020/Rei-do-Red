@@ -477,7 +477,7 @@ def rodar_radar():
                 actionable = [s for s in live_result.signals if signal_is_actionable(s)]
 
                 if actionable:
-                    resposta = gerar_analise_ao_vivo(jogo_info)
+                    resposta = gerar_analise_ao_vivo(jogo_info, fi_signals=actionable)
                     texto_gatilhos = "\n".join(f"- {m}" for m in motivos)
                     top_signals = sorted(
                         actionable,

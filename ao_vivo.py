@@ -174,7 +174,7 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                             f"| odd justa {fair_text} | {signal.status}"
                         )
 
-                    resposta = gerar_analise_ao_vivo(jogo_info)
+                    resposta = gerar_analise_ao_vivo(jogo_info, fi_signals=live_result.signals)
                     exibir_analise_ao_vivo(
                         resposta,
                         nome_casa=home,
