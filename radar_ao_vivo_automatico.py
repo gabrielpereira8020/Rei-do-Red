@@ -47,7 +47,7 @@ from api_football import _get  # reaproveita o rate limiter já configurado
 from ia_engine import gerar_analise_ao_vivo
 from football_intelligence.live_adapter import build_live_context
 from football_intelligence.live_engine import analyze_live, signal_is_actionable
-from football_intelligence.live_value import evaluate_all_live_value
+from football_intelligence.live_value import evaluate_all_live_value, build_value_combos
 
 
 # ─────────────────────────────────────────────
@@ -412,6 +412,8 @@ def rodar_radar():
     fixture_ids_agora = [j["fixture"]["id"] for j in elite_live]
     limpar_jogos_encerrados(supabase, fixture_ids_agora)
 
+    combos_pool = {}
+
     for jogo in elite_live:
         fixture_id = jogo["fixture"]["id"]
         home       = jogo["teams"]["home"]["name"]
@@ -487,6 +489,8 @@ def rodar_radar():
                     odds_payload=odds_payload,
                 )
                 value_bets = [c for c in value_candidates if c.status == "BET_ELIGIBLE"]
+                if value_bets:
+                    combos_pool[fixture_id] = value_bets
 
                 if actionable:
                     resposta = gerar_analise_ao_vivo(jogo_info, fi_signals=actionable)
@@ -558,6 +562,34 @@ def rodar_radar():
             gols_home, gols_away, cartoes_vistos_atualizados, odds_atual,
             ultimo_alerta_ts
         )
+
+    # Depois de avaliar todos os jogos, tenta montar uma combinação conservadora
+    # somente com pernas que já passaram individualmente como BET_ELIGIBLE.
+    try:
+        combos = build_value_combos(
+            combos_pool,
+            target_min_odds=1.40,
+            target_max_odds=1.60,
+            min_leg_odds=1.12,
+            max_legs=3,
+        )
+        if combos:
+            combo = combos[0]
+            linhas = "\n".join(
+                f"• {leg.label} @ {leg.odds:.2f} | "
+                f"Modelo {leg.model_probability*100:.1f}% | EV {leg.expected_value*100:.1f}%"
+                for leg in combo.legs
+            )
+            enviar_telegram(
+                "<b>🧩 VALUE COMBO - REI-DO-RED</b>\n\n"
+                f"{linhas}\n\n"
+                f"Odd combinada: {combo.combined_odds:.2f}\n"
+                f"Prob. modelo combinada: {combo.combined_probability*100:.1f}%\n"
+                f"EV combinado: {combo.expected_value*100:.1f}%\n"
+                "Todas as pernas passaram individualmente como BET_ELIGIBLE."
+            )
+    except Exception as e:
+        log(f"Erro ao montar value combo: {e}")
 
 
 if __name__ == "__main__":
