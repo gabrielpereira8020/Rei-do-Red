@@ -3,6 +3,7 @@ from ia_engine import gerar_analise_ao_vivo
 from formatacao import exibir_analise_ao_vivo
 from football_intelligence.live_adapter import build_live_context
 from football_intelligence.live_engine import analyze_live
+from football_intelligence.live_value import evaluate_corner_value
 
 LIGAS_ELITE = [
     71, 72, 73,
@@ -198,6 +199,25 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                                 fair_text = f"{signal.fair_odds:.2f}" if signal.fair_odds is not None else "—"
                                 st.metric(signal.label, f"{signal.probability*100:.1f}%")
                                 st.caption(f"Odd justa {fair_text} · {signal.status}")
+
+                    odds_payload = fetch_api("odds/live?fixture=" + str(fixture_id))
+                    value_candidates = evaluate_corner_value(
+                        live_result,
+                        current_corners=int((live_context.live.home_corners or 0) + (live_context.live.away_corners or 0)),
+                        odds_payload=odds_payload,
+                    )
+                    if value_candidates:
+                        st.markdown("##### 💎 Valor de mercado")
+                        for candidate in value_candidates:
+                            market_p = candidate.market_probability_devig if candidate.market_probability_devig is not None else candidate.market_probability_raw
+                            st.write(
+                                f"**{candidate.label} @ {candidate.odds:.2f}** — "
+                                f"Modelo {candidate.model_probability*100:.1f}% | "
+                                f"Mercado {market_p*100:.1f}% | "
+                                f"Edge {candidate.edge*100:.1f}% | "
+                                f"EV {candidate.expected_value*100:.1f}% | "
+                                f"{candidate.status}"
+                            )
 
                     resposta = gerar_analise_ao_vivo(jogo_info, fi_signals=live_result.signals)
                     exibir_analise_ao_vivo(

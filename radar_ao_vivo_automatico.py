@@ -47,6 +47,7 @@ from api_football import _get  # reaproveita o rate limiter já configurado
 from ia_engine import gerar_analise_ao_vivo
 from football_intelligence.live_adapter import build_live_context
 from football_intelligence.live_engine import analyze_live, signal_is_actionable
+from football_intelligence.live_value import evaluate_corner_value
 
 
 # ─────────────────────────────────────────────
@@ -475,6 +476,13 @@ def rodar_radar():
                 )
 
                 actionable = [s for s in live_result.signals if signal_is_actionable(s)]
+                odds_payload = _get(f"odds/live?fixture={fixture_id}") if pressao >= PRESSAO_MINIMA_PARA_DETALHAR else []
+                value_candidates = evaluate_corner_value(
+                    live_result,
+                    current_corners=escanteios,
+                    odds_payload=odds_payload,
+                )
+                value_bets = [c for c in value_candidates if c.status == "BET_ELIGIBLE"]
 
                 if actionable:
                     resposta = gerar_analise_ao_vivo(jogo_info, fi_signals=actionable)
@@ -490,6 +498,26 @@ def rodar_radar():
                         for s in top_signals
                     )
 
+                    bloco_valor = ""
+                    if value_bets:
+                        melhor_valor = value_bets[0]
+                        mercado_pct = (
+                            melhor_valor.market_probability_devig
+                            if melhor_valor.market_probability_devig is not None
+                            else melhor_valor.market_probability_raw
+                        )
+                        bloco_valor = (
+                            "\n<b>💎 VALOR ENCONTRADO</b>\n"
+                            f"{melhor_valor.label} @ {melhor_valor.odds:.2f}\n"
+                            f"Modelo: {melhor_valor.model_probability*100:.1f}% | "
+                            f"Mercado: {mercado_pct*100:.1f}%\n"
+                            f"Edge: {melhor_valor.edge*100:.1f}% | "
+                            f"EV: {melhor_valor.expected_value*100:.1f}%\n"
+                            f"Status: {melhor_valor.status}\n"
+                        )
+                    elif value_candidates:
+                        bloco_valor = "\n<b>💎 VALOR</b>\nNenhuma linha de escanteios passou o filtro de edge/EV agora.\n"
+
                     enviar_telegram(
                         "<b>⚡ SINAL AO VIVO - REI-DO-RED</b>\n\n"
                         f"{texto_gatilhos}\n\n"
@@ -498,7 +526,8 @@ def rodar_radar():
                         f"Pressão: {pressao}\n\n"
                         "<b>📡 Football Intelligence</b>\n"
                         f"{linhas_fi}\n"
-                        f"Dados: {live_result.data_quality*100:.0f}% | Modelo: {live_result.model_quality*100:.0f}%\n\n"
+                        f"Dados: {live_result.data_quality*100:.0f}% | Modelo: {live_result.model_quality*100:.0f}%\n"
+                        f"{bloco_valor}\n"
                         "<b>🧠 Gemini</b>\n"
                         f"{resposta[:700]}"
                     )

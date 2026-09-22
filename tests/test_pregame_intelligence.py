@@ -252,3 +252,56 @@ def test_live_ui_contains_signal_cards():
     ao = Path("ao_vivo.py").read_text(encoding="utf-8")
     assert ".signal-card" in main
     assert "Janelas rápidas" in ao
+
+
+def test_live_value_matches_corner_total_line():
+    from football_intelligence.live_value import evaluate_corner_value
+    from types import SimpleNamespace
+
+    live_result = SimpleNamespace(
+        data_quality=1.0,
+        model_quality=0.9,
+        signals=(
+            SimpleNamespace(key="one_more_corner", probability=0.80),
+            SimpleNamespace(key="two_more_corners", probability=0.65),
+            SimpleNamespace(key="three_more_corners", probability=0.45),
+        ),
+    )
+    payload = [{
+        "bets": [{
+            "name": "Corners",
+            "values": [
+                {"value": "Over 9.5", "odd": "1.50"},
+                {"value": "Under 9.5", "odd": "2.40"},
+            ],
+        }]
+    }]
+
+    result = evaluate_corner_value(live_result, current_corners=9, odds_payload=payload)
+    assert result
+    assert result[0].line == 9.5
+    assert result[0].label == "Over 9.5 escanteios"
+
+
+def test_live_value_can_mark_bet_eligible():
+    from football_intelligence.live_value import evaluate_corner_value
+    from types import SimpleNamespace
+
+    live_result = SimpleNamespace(
+        data_quality=1.0,
+        model_quality=0.9,
+        signals=(SimpleNamespace(key="one_more_corner", probability=0.90),),
+    )
+    payload = [{
+        "bets": [{
+            "name": "Total Corners",
+            "values": [
+                {"value": "Over 9.5", "odd": "1.45"},
+                {"value": "Under 9.5", "odd": "2.70"},
+            ],
+        }]
+    }]
+
+    result = evaluate_corner_value(live_result, current_corners=9, odds_payload=payload)
+    assert result[0].status == "BET_ELIGIBLE"
+    assert result[0].expected_value > 0
