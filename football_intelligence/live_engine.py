@@ -146,6 +146,18 @@ def analyze_live(context: MatchContext, pregame_home_xg: float, pregame_away_xg:
     p_one_card = _prob_at_least(expected_remaining_cards, 1)
     p_two_cards = _prob_at_least(expected_remaining_cards, 2)
 
+    # Janela curta: aproximação para os próximos 10 minutos.
+    # Escala a expectativa restante pela fração temporal da janela.
+    remaining_minutes = max(1.0, 95.0 - min(minute, 95))
+    window_10_fraction = min(1.0, 10.0 / remaining_minutes)
+    expected_corners_10m = expected_remaining_corners * window_10_fraction
+    expected_cards_10m = expected_remaining_cards * window_10_fraction
+    expected_goals_10m = rem_total * window_10_fraction
+
+    p_corner_10m = _prob_at_least(expected_corners_10m, 1)
+    p_card_10m = _prob_at_least(expected_cards_10m, 1)
+    p_goal_10m = _prob_at_least(expected_goals_10m, 1)
+
     signals = (
         LiveMarketSignal(
             "next_goal_any", "Sai pelo menos 1 gol", p_goal, _fair_odds(p_goal),
@@ -191,6 +203,21 @@ def analyze_live(context: MatchContext, pregame_home_xg: float, pregame_away_xg:
             "two_more_cards", "Saem pelo menos 2 cartões", p_two_cards, _fair_odds(p_two_cards),
             _status(p_two_cards, data_quality, model_quality),
             f"Restante esperado de cartões: {expected_remaining_cards:.2f}",
+        ),
+        LiveMarketSignal(
+            "corner_next_10m", "Sai pelo menos 1 escanteio nos próximos 10 min", p_corner_10m, _fair_odds(p_corner_10m),
+            _status(p_corner_10m, data_quality, model_quality),
+            f"Esperado na janela de 10 min: {expected_corners_10m:.2f} escanteios",
+        ),
+        LiveMarketSignal(
+            "card_next_10m", "Sai pelo menos 1 cartão nos próximos 10 min", p_card_10m, _fair_odds(p_card_10m),
+            _status(p_card_10m, data_quality, model_quality),
+            f"Esperado na janela de 10 min: {expected_cards_10m:.2f} cartões",
+        ),
+        LiveMarketSignal(
+            "goal_next_10m", "Sai pelo menos 1 gol nos próximos 10 min", p_goal_10m, _fair_odds(p_goal_10m),
+            _status(p_goal_10m, data_quality, model_quality),
+            f"Esperado na janela de 10 min: {expected_goals_10m:.2f} gols",
         ),
     )
 
