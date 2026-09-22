@@ -305,3 +305,89 @@ def test_live_value_can_mark_bet_eligible():
     result = evaluate_corner_value(live_result, current_corners=9, odds_payload=payload)
     assert result[0].status == "BET_ELIGIBLE"
     assert result[0].expected_value > 0
+
+
+def test_live_value_matches_goal_total_line():
+    from football_intelligence.live_value import evaluate_goal_value
+    from types import SimpleNamespace
+
+    live_result = SimpleNamespace(
+        data_quality=1.0,
+        model_quality=0.9,
+        signals=(
+            SimpleNamespace(key="next_goal_any", probability=0.82),
+            SimpleNamespace(key="two_more_goals", probability=0.44),
+        ),
+    )
+    payload = [{
+        "bets": [{
+            "name": "Total Goals",
+            "values": [
+                {"value": "Over 2.5", "odd": "1.55"},
+                {"value": "Under 2.5", "odd": "2.35"},
+            ],
+        }]
+    }]
+
+    result = evaluate_goal_value(live_result, current_goals=2, odds_payload=payload)
+    assert result
+    assert result[0].label == "Over 2.5 gols"
+
+
+def test_live_value_matches_card_total_line():
+    from football_intelligence.live_value import evaluate_card_value
+    from types import SimpleNamespace
+
+    live_result = SimpleNamespace(
+        data_quality=1.0,
+        model_quality=0.9,
+        signals=(
+            SimpleNamespace(key="one_more_card", probability=0.80),
+            SimpleNamespace(key="two_more_cards", probability=0.52),
+        ),
+    )
+    payload = [{
+        "bets": [{
+            "name": "Total Cards",
+            "values": [
+                {"value": "Over 3.5", "odd": "1.70"},
+                {"value": "Under 3.5", "odd": "2.05"},
+            ],
+        }]
+    }]
+
+    result = evaluate_card_value(live_result, current_cards=3, odds_payload=payload)
+    assert result
+    assert result[0].label == "Over 3.5 cartões"
+
+
+def test_all_live_value_combines_supported_markets():
+    from football_intelligence.live_value import evaluate_all_live_value
+    from types import SimpleNamespace
+
+    live_result = SimpleNamespace(
+        data_quality=1.0,
+        model_quality=0.9,
+        signals=(
+            SimpleNamespace(key="next_goal_any", probability=0.80),
+            SimpleNamespace(key="two_more_goals", probability=0.40),
+            SimpleNamespace(key="one_more_corner", probability=0.85),
+            SimpleNamespace(key="two_more_corners", probability=0.60),
+            SimpleNamespace(key="three_more_corners", probability=0.35),
+            SimpleNamespace(key="one_more_card", probability=0.78),
+            SimpleNamespace(key="two_more_cards", probability=0.48),
+        ),
+    )
+    payload = [{
+        "bets": [
+            {"name": "Total Goals", "values": [{"value": "Over 1.5", "odd": "1.60"}, {"value": "Under 1.5", "odd": "2.20"}]},
+            {"name": "Total Corners", "values": [{"value": "Over 7.5", "odd": "1.50"}, {"value": "Under 7.5", "odd": "2.45"}]},
+            {"name": "Total Cards", "values": [{"value": "Over 2.5", "odd": "1.65"}, {"value": "Under 2.5", "odd": "2.10"}]},
+        ]
+    }]
+
+    result = evaluate_all_live_value(live_result, current_goals=1, current_corners=7, current_cards=2, odds_payload=payload)
+    markets = {item.market for item in result}
+    assert "TOTAL_GOALS" in markets
+    assert "TOTAL_CORNERS" in markets
+    assert "TOTAL_CARDS" in markets
