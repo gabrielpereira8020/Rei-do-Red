@@ -495,3 +495,13 @@ def test_pregame_combo_allows_same_fixture_when_legs_are_individually_eligible()
     ])
     assert same_game
     assert all(leg.fixture_id == 1 for leg in same_game[0].legs)
+
+
+def test_pregame_premium_value_card_ui_exists():
+    from pathlib import Path
+    painel = Path("painel_do_dia.py").read_text(encoding="utf-8")
+    main = Path("main.py").read_text(encoding="utf-8")
+    assert "Por que o Rei-do-Red escolheu este mercado?" in painel
+    assert "def _entry_score" in painel
+    assert "value-card-premium" in painel
+    assert ".value-card-premium" in main
