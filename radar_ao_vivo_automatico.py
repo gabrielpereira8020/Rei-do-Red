@@ -47,7 +47,7 @@ from api_football import _get  # reaproveita o rate limiter já configurado
 from ia_engine import gerar_analise_ao_vivo
 from football_intelligence.live_adapter import build_live_context
 from football_intelligence.live_engine import analyze_live, signal_is_actionable
-from football_intelligence.live_value import evaluate_corner_value
+from football_intelligence.live_value import evaluate_all_live_value
 
 
 # ─────────────────────────────────────────────
@@ -477,9 +477,13 @@ def rodar_radar():
 
                 actionable = [s for s in live_result.signals if signal_is_actionable(s)]
                 odds_payload = _get(f"odds/live?fixture={fixture_id}") if pressao >= PRESSAO_MINIMA_PARA_DETALHAR else []
-                value_candidates = evaluate_corner_value(
+                current_cards = int((live_context.live.home_cards or 0) + (live_context.live.away_cards or 0))
+                current_goals = int(gols_home + gols_away)
+                value_candidates = evaluate_all_live_value(
                     live_result,
+                    current_goals=current_goals,
                     current_corners=escanteios,
+                    current_cards=current_cards,
                     odds_payload=odds_payload,
                 )
                 value_bets = [c for c in value_candidates if c.status == "BET_ELIGIBLE"]
@@ -500,6 +504,7 @@ def rodar_radar():
 
                     bloco_valor = ""
                     if value_bets:
+                        # Evita três linhas correlacionadas do mesmo mercado: mostra só o melhor candidato global.
                         melhor_valor = value_bets[0]
                         mercado_pct = (
                             melhor_valor.market_probability_devig

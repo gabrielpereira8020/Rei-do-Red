@@ -3,7 +3,7 @@ from ia_engine import gerar_analise_ao_vivo
 from formatacao import exibir_analise_ao_vivo
 from football_intelligence.live_adapter import build_live_context
 from football_intelligence.live_engine import analyze_live
-from football_intelligence.live_value import evaluate_corner_value
+from football_intelligence.live_value import evaluate_all_live_value
 
 LIGAS_ELITE = [
     71, 72, 73,
@@ -201,9 +201,11 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
                                 st.caption(f"Odd justa {fair_text} · {signal.status}")
 
                     odds_payload = fetch_api("odds/live?fixture=" + str(fixture_id))
-                    value_candidates = evaluate_corner_value(
+                    value_candidates = evaluate_all_live_value(
                         live_result,
+                        current_goals=int(gols_home + gols_away),
                         current_corners=int((live_context.live.home_corners or 0) + (live_context.live.away_corners or 0)),
+                        current_cards=int((live_context.live.home_cards or 0) + (live_context.live.away_cards or 0)),
                         odds_payload=odds_payload,
                     )
                     if value_candidates:
