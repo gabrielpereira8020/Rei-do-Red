@@ -424,3 +424,68 @@ def test_value_combo_uses_only_individually_eligible_different_fixtures():
     assert 1.40 <= combo.combined_odds <= 1.60
     assert all(leg.status == "BET_ELIGIBLE" for leg in combo.legs)
     assert combo.expected_value > 0
+
+
+def test_pregame_alternative_value_requires_real_matching_quote():
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from football_intelligence.models import OddsQuote
+    from football_intelligence.pregame_value import alternative_value_candidates
+
+    estimates = {
+        "corners": SimpleNamespace(
+            market="TOTAL_CORNERS",
+            line=8.5,
+            probability_over=0.78,
+            quality=0.9,
+        )
+    }
+    quotes = [
+        OddsQuote("Book", "TOTAL_CORNERS", "OVER", 1.55, datetime.now(timezone.utc), 8.5),
+        OddsQuote("Book", "TOTAL_CORNERS", "UNDER", 2.20, datetime.now(timezone.utc), 8.5),
+    ]
+    result = alternative_value_candidates(
+        fixture_id=1,
+        game="Home x Away",
+        estimates=estimates,
+        quotes=quotes,
+        data_quality=0.95,
+        model_quality=0.8,
+    )
+    assert result
+    assert result[0].market == "TOTAL_CORNERS"
+    assert result[0].odds == 1.55
+
+
+def test_pregame_combo_only_uses_eligible_different_fixtures():
+    from football_intelligence.pregame_value import PregameValueCandidate, build_pregame_value_combos
+
+    def c(fid, odds, p, ev, status="BET_ELIGIBLE"):
+        return PregameValueCandidate(
+            fixture_id=fid,
+            game=f"Game {fid}",
+            market="TOTAL_GOALS",
+            line=1.5,
+            selection="OVER",
+            odds=odds,
+            model_probability=p,
+            market_probability_raw=1/odds,
+            market_probability_devig=0.7,
+            edge=0.07,
+            expected_value=ev,
+            data_quality=0.9,
+            model_quality=0.8,
+            status=status,
+            bookmaker="Book",
+            label="TOTAL_GOALS OVER 1.5",
+        )
+
+    combos = build_pregame_value_combos([
+        c(1, 1.20, 0.88, 0.056),
+        c(2, 1.25, 0.86, 0.075),
+        c(1, 1.22, 0.87, 0.061),
+        c(3, 1.10, 0.94, 0.034, status="WATCH"),
+    ])
+    assert combos
+    assert len({leg.fixture_id for leg in combos[0].legs}) == len(combos[0].legs)
+    assert all(leg.status == "BET_ELIGIBLE" for leg in combos[0].legs)
