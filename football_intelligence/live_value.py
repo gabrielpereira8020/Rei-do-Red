@@ -316,3 +316,82 @@ def evaluate_all_live_value(live_result, current_goals: int, current_corners: in
     candidates.extend(evaluate_corner_value(live_result, current_corners, odds_payload, min_edge, min_ev))
     candidates.extend(evaluate_card_value(live_result, current_cards, odds_payload, min_edge, min_ev))
     return sorted(candidates, key=lambda item: (item.status == "BET_ELIGIBLE", item.expected_value, item.edge or -1.0), reverse=True)
+
+
+@dataclass(frozen=True)
+class LiveValueCombo:
+    legs: tuple[LiveValueCandidate, ...]
+    combined_odds: float
+    combined_probability: float
+    expected_value: float
+    status: str
+
+
+def build_value_combos(
+    candidates_by_fixture: dict[int, list[LiveValueCandidate]],
+    target_min_odds: float = 1.40,
+    target_max_odds: float = 1.60,
+    min_leg_odds: float = 1.12,
+    max_legs: int = 3,
+) -> list[LiveValueCombo]:
+    """Build conservative multi-game combos from individually qualified value legs.
+
+    Rules:
+    - only BET_ELIGIBLE legs
+    - at most one leg per fixture to avoid same-game correlation
+    - each leg must meet minimum decimal odds
+    - prefer 2 legs, allow 3 only if needed to reach the target band
+    """
+    from itertools import combinations
+
+    pool: list[tuple[int, LiveValueCandidate]] = []
+    for fixture_id, candidates in candidates_by_fixture.items():
+        eligible = [
+            c for c in candidates
+            if c.status == "BET_ELIGIBLE" and c.odds >= min_leg_odds
+        ]
+        if eligible:
+            best = max(
+                eligible,
+                key=lambda c: (
+                    c.expected_value,
+                    c.edge or -1.0,
+                    c.model_probability,
+                ),
+            )
+            pool.append((fixture_id, best))
+
+    combos: list[LiveValueCombo] = []
+    for size in range(2, max_legs + 1):
+        for items in combinations(pool, size):
+            fixture_ids = [fixture_id for fixture_id, _ in items]
+            if len(set(fixture_ids)) != size:
+                continue
+
+            legs = tuple(candidate for _, candidate in items)
+            combined_odds = 1.0
+            combined_probability = 1.0
+            for leg in legs:
+                combined_odds *= leg.odds
+                combined_probability *= leg.model_probability
+
+            combo_ev = combined_probability * combined_odds - 1.0
+            if target_min_odds <= combined_odds <= target_max_odds and combo_ev > 0:
+                combos.append(
+                    LiveValueCombo(
+                        legs=legs,
+                        combined_odds=combined_odds,
+                        combined_probability=combined_probability,
+                        expected_value=combo_ev,
+                        status="VALUE_COMBO",
+                    )
+                )
+
+    return sorted(
+        combos,
+        key=lambda combo: (
+            abs(((target_min_odds + target_max_odds) / 2.0) - combo.combined_odds),
+            -combo.expected_value,
+            len(combo.legs),
+        ),
+    )
