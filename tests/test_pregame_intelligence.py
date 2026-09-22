@@ -391,3 +391,36 @@ def test_all_live_value_combines_supported_markets():
     assert "TOTAL_GOALS" in markets
     assert "TOTAL_CORNERS" in markets
     assert "TOTAL_CARDS" in markets
+
+
+def test_value_combo_uses_only_individually_eligible_different_fixtures():
+    from football_intelligence.live_value import LiveValueCandidate, build_value_combos
+
+    def c(label, odds, p, ev, status="BET_ELIGIBLE"):
+        return LiveValueCandidate(
+            market="TOTAL_CORNERS",
+            line=9.5,
+            selection="OVER",
+            odds=odds,
+            model_probability=p,
+            market_probability_raw=0.7,
+            market_probability_devig=0.68,
+            edge=0.08,
+            expected_value=ev,
+            status=status,
+            label=label,
+        )
+
+    candidates = {
+        1: [c("A", 1.20, 0.88, 0.056)],
+        2: [c("B", 1.25, 0.86, 0.075)],
+        3: [c("C", 1.10, 0.93, 0.023, status="WATCH")],
+    }
+
+    combos = build_value_combos(candidates, target_min_odds=1.40, target_max_odds=1.60)
+    assert combos
+    combo = combos[0]
+    assert len(combo.legs) == 2
+    assert 1.40 <= combo.combined_odds <= 1.60
+    assert all(leg.status == "BET_ELIGIBLE" for leg in combo.legs)
+    assert combo.expected_value > 0
