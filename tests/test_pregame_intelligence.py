@@ -207,3 +207,48 @@ def test_gemini_live_is_bound_to_football_intelligence():
     assert "Football Intelligence é a fonte principal" in ia
     assert "fi_signals=actionable" in radar
     assert "fi_signals=live_result.signals" in ao
+
+
+def test_live_engine_includes_next_10_minute_signals():
+    from datetime import datetime, timezone
+    from football_intelligence.live_engine import analyze_live
+    from football_intelligence.models import LeagueBaseline, LiveState, MatchContext, TeamProfile
+
+    ctx = MatchContext(
+        fixture_id=1001,
+        league_id=39,
+        season=2026,
+        kickoff_utc=datetime(2026, 9, 21, 20, 0, tzinfo=timezone.utc),
+        home=TeamProfile(team_id=1, name="Home", home_goals_for_avg=1.6, home_goals_against_avg=1.0, matches_sample=20),
+        away=TeamProfile(team_id=2, name="Away", away_goals_for_avg=1.1, away_goals_against_avg=1.4, matches_sample=20),
+        league=LeagueBaseline(league_id=39, season=2026, home_goals_avg=1.5, away_goals_avg=1.2),
+        live=LiveState(
+            minute=55,
+            home_goals=1,
+            away_goals=1,
+            home_shots=12,
+            away_shots=8,
+            home_shots_on_target=5,
+            away_shots_on_target=3,
+            home_corners=5,
+            away_corners=4,
+            home_cards=1,
+            away_cards=2,
+            home_fouls=7,
+            away_fouls=9,
+        ),
+    )
+
+    result = analyze_live(ctx, 1.5, 1.2)
+    keys = {s.key for s in result.signals}
+    assert "corner_next_10m" in keys
+    assert "card_next_10m" in keys
+    assert "goal_next_10m" in keys
+
+
+def test_live_ui_contains_signal_cards():
+    from pathlib import Path
+    main = Path("main.py").read_text(encoding="utf-8")
+    ao = Path("ao_vivo.py").read_text(encoding="utf-8")
+    assert ".signal-card" in main
+    assert "Janelas rápidas" in ao

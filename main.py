@@ -30,15 +30,22 @@ st.set_page_config(
 # =====================================================
 st.markdown("""
 <style>
-.main { background-color: #0b1020; }
-.block-container { padding-top: 1rem; }
-h1, h2, h3 { color: white; }
-.stMetric {
-    background: linear-gradient(145deg,#141b2d,#1d2840);
-    border-radius: 15px;
-    padding: 15px;
-    border: 1px solid #7a3cff;
+.stApp {
+    background:
+        radial-gradient(circle at 10% 0%, rgba(124,58,237,.18), transparent 28%),
+        radial-gradient(circle at 90% 10%, rgba(37,99,235,.14), transparent 24%),
+        linear-gradient(180deg,#07111f 0%,#0b1020 50%,#0a0f1d 100%);
 }
+.block-container { padding-top: 1rem; max-width: 1500px; }
+h1, h2, h3 { color: white; letter-spacing: -0.02em; }
+.stMetric {
+    background: linear-gradient(145deg,rgba(20,27,45,.96),rgba(29,40,64,.92));
+    border-radius: 18px;
+    padding: 15px;
+    border: 1px solid rgba(124,58,237,.72);
+    box-shadow: 0 10px 35px rgba(0,0,0,.22);
+}
+div[data-testid="stMetricValue"] { font-weight: 800; }
 .stButton>button {
     width: 100%;
     border-radius: 10px;
@@ -57,7 +64,46 @@ h1, h2, h3 { color: white; }
     border-radius: 15px;
     background: #121a2b;
 }
-div[data-testid="stSidebar"] { background-color: #0d1117; }
+div[data-testid="stSidebar"] {
+    background: linear-gradient(180deg,#0b1220,#0d1117);
+    border-right: 1px solid rgba(148,163,184,.12);
+}
+.stTabs [data-baseweb="tab-list"] {
+    gap: .45rem;
+    background: rgba(15,23,42,.72);
+    border: 1px solid rgba(148,163,184,.12);
+    padding: .45rem;
+    border-radius: 16px;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 12px;
+    padding: .55rem .8rem;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(90deg,rgba(124,58,237,.28),rgba(79,70,229,.24));
+}
+.signal-card {
+    background: linear-gradient(145deg,rgba(18,26,43,.98),rgba(13,20,34,.96));
+    border: 1px solid rgba(148,163,184,.14);
+    border-radius: 18px;
+    padding: 14px 16px;
+    margin: 8px 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,.18);
+}
+.signal-title { font-weight: 800; font-size: 1rem; color: #f8fafc; }
+.signal-meta { color: #94a3b8; font-size: .88rem; margin-top: 4px; }
+.badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 800;
+    margin-left: 8px;
+}
+.badge-signal { background: rgba(34,197,94,.16); color: #86efac; border: 1px solid rgba(34,197,94,.35); }
+.badge-watch { background: rgba(234,179,8,.14); color: #fde68a; border: 1px solid rgba(234,179,8,.35); }
+.badge-no { background: rgba(239,68,68,.12); color: #fca5a5; border: 1px solid rgba(239,68,68,.30); }
+.badge-data { background: rgba(59,130,246,.14); color: #93c5fd; border: 1px solid rgba(59,130,246,.30); }
 .api-counter {
     background: linear-gradient(135deg,#1a1a0a,#2a2a1a);
     border: 1px solid #eab308;
