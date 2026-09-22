@@ -33,6 +33,152 @@ DEFAULT_LEAGUES = [
 ]
 
 
+
+def _clamp01(value: float | None) -> float:
+    if value is None:
+        return 0.0
+    return max(0.0, min(1.0, float(value)))
+
+
+def _entry_score(item, row: dict) -> int:
+    """Transparent 0-100 score for display; not a calibrated win probability."""
+    probability = _clamp01(getattr(item, "model_probability", getattr(item, "probability", None)))
+    edge = max(0.0, min(0.20, float(getattr(item, "edge", 0.0) or 0.0))) / 0.20
+    ev = max(0.0, min(0.25, float(getattr(item, "expected_value", 0.0) or 0.0))) / 0.25
+    data_quality = _clamp01(getattr(item, "data_quality", row.get("data_quality")))
+    model_quality = _clamp01(getattr(item, "model_quality", row.get("model_quality")))
+    score = (
+        probability * 0.30
+        + edge * 0.20
+        + ev * 0.20
+        + data_quality * 0.15
+        + model_quality * 0.15
+    )
+    return int(round(score * 100))
+
+
+def _find_alt_estimate(row: dict, item):
+    market = getattr(item, "market", None)
+    line = getattr(item, "line", None)
+    if market not in {"TOTAL_CORNERS", "TOTAL_CARDS"} or line is None:
+        return None
+    for estimate in row.get("alternatives", {}).values():
+        if estimate.market == market and estimate.line == line:
+            return estimate
+    return None
+
+
+def _hit_context(row: dict, item) -> tuple[float | None, float | None, float | None, float | None]:
+    estimate = _find_alt_estimate(row, item)
+    if estimate is None:
+        return None, None, None, None
+    profile_key = "corners" if estimate.market == "TOTAL_CORNERS" else "cards"
+    profile = row.get("recent_profile", {}).get(profile_key, {})
+    home_vals = profile.get("home", [])
+    away_vals = profile.get("away", [])
+    return (
+        hit_rate(home_vals[:5], estimate.line),
+        hit_rate(home_vals[:10], estimate.line),
+        hit_rate(away_vals[:5], estimate.line),
+        hit_rate(away_vals[:10], estimate.line),
+    )
+
+
+def _premium_reasons(row: dict, item) -> list[str]:
+    reasons = []
+    probability = getattr(item, "model_probability", getattr(item, "probability", None))
+    fair_odds = (1.0 / probability) if probability and probability > 0 else None
+    offered = getattr(item, "odds", getattr(item, "offered_odds", None))
+    edge_value = getattr(item, "edge", None)
+    ev_value = getattr(item, "expected_value", None)
+    estimate = _find_alt_estimate(row, item)
+
+    if probability is not None:
+        reasons.append(f"Modelo estima {probability*100:.1f}% para esta seleção")
+    if fair_odds is not None and offered is not None:
+        reasons.append(f"Odd justa ~{fair_odds:.2f} contra {offered:.2f} oferecida")
+    if edge_value is not None:
+        reasons.append(f"Edge estimado de {edge_value*100:.1f}%")
+    if ev_value is not None:
+        reasons.append(f"EV estimado de {ev_value*100:.1f}%")
+    if estimate is not None and estimate.expected is not None:
+        reasons.append(f"Projeção do mercado: {estimate.expected:.2f} para linha {estimate.line:.1f}")
+    if row.get("data_quality") is not None:
+        reasons.append(f"Qualidade dos dados: {row['data_quality']*100:.0f}%")
+    return reasons[:6]
+
+
+def _render_premium_value_card(row: dict, item) -> None:
+    game = row.get("game") or "Jogo"
+    market = getattr(item, "market", "")
+    line = getattr(item, "line", None)
+    selection = getattr(item, "selection", "")
+    odds = getattr(item, "odds", getattr(item, "offered_odds", None))
+    probability = getattr(item, "model_probability", getattr(item, "probability", None))
+    edge_value = getattr(item, "edge", None)
+    ev_value = getattr(item, "expected_value", None)
+    fair_odds = (1.0 / probability) if probability and probability > 0 else None
+    score = _entry_score(item, row)
+    estimate = _find_alt_estimate(row, item)
+    h5, h10, a5, a10 = _hit_context(row, item)
+
+    market_label = {
+        "TOTAL_GOALS": "Gols",
+        "TOTAL_CORNERS": "Escanteios",
+        "TOTAL_CARDS": "Cartões",
+        "1X2": "Resultado",
+        "BTTS": "Ambas marcam",
+        "DOUBLE_CHANCE": "Dupla chance",
+    }.get(market, market)
+
+    line_text = "" if line is None else f" {line:.1f}"
+    headline = f"{selection}{line_text} {market_label}".strip()
+
+    st.markdown(
+        f"""
+        <div class="value-card-premium">
+          <div class="value-topline">
+            <div>
+              <div class="value-game">{game}</div>
+              <div class="value-market">{headline}</div>
+            </div>
+            <div class="value-odd">@ {odds:.2f}</div>
+          </div>
+          <div class="value-grid">
+            <div><span>PROJEÇÃO</span><strong>{(f'{estimate.expected:.2f}' if estimate and estimate.expected is not None else '—')}</strong></div>
+            <div><span>PROB. MODELO</span><strong>{(f'{probability*100:.1f}%' if probability is not None else '—')}</strong></div>
+            <div><span>SCORE</span><strong>{score}</strong></div>
+            <div><span>ODD JUSTA</span><strong>{(f'{fair_odds:.2f}' if fair_odds is not None else '—')}</strong></div>
+          </div>
+          <div class="value-grid compact">
+            <div><span>EDGE</span><strong>{(f'{edge_value*100:.1f}%' if edge_value is not None else '—')}</strong></div>
+            <div><span>EV</span><strong>{(f'{ev_value*100:.1f}%' if ev_value is not None else '—')}</strong></div>
+            <div><span>DADOS</span><strong>{row.get('data_quality',0)*100:.0f}%</strong></div>
+            <div><span>MODELO</span><strong>{row.get('model_quality',0)*100:.0f}%</strong></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if any(v is not None for v in (h5, h10, a5, a10)):
+        l1, l2, l3, l4 = st.columns(4)
+        l1.metric("Casa L5", _fmt_pct(h5))
+        l2.metric("Casa L10", _fmt_pct(h10))
+        l3.metric("Fora L5", _fmt_pct(a5))
+        l4.metric("Fora L10", _fmt_pct(a10))
+
+    with st.expander("🔎 Por que o Rei-do-Red escolheu este mercado?"):
+        for reason in _premium_reasons(row, item):
+            st.write(f"• {reason}")
+        if score >= 80:
+            st.caption("Score alto de qualidade/valor. Isso não representa chance garantida de acerto.")
+        elif score >= 65:
+            st.caption("Score intermediário: há valor, mas a margem para erro do modelo é menor.")
+        else:
+            st.caption("Score moderado: trate como oportunidade com cautela, não como sinal forte.")
+
+
 def _league_catalog() -> dict[str, int]:
     result: dict[str, int] = {}
     for country, comps in LIGAS.items():
@@ -292,13 +438,10 @@ def tela_painel_do_dia() -> None:
 
     if eligible_values:
         st.markdown("### 💎 Value Scanner Pré-Jogo")
+        row_by_fixture = {int(r["fixture_id"]): r for r in rows if r.get("fixture_id") is not None}
         for item in sorted(eligible_values, key=lambda x: (x.expected_value, x.edge), reverse=True)[:10]:
-            st.write(
-                f"**{item.game} — {item.label} @ {item.odds:.2f}** | "
-                f"Modelo {item.model_probability*100:.1f}% | "
-                f"Edge {item.edge*100:.1f}% | EV {item.expected_value*100:.1f}% | "
-                f"{item.status}"
-            )
+            row = row_by_fixture.get(int(item.fixture_id), {})
+            _render_premium_value_card(row, item)
 
     if combos:
         combo = combos[0]
