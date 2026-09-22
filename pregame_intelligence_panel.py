@@ -14,6 +14,92 @@ from football_intelligence.shadow import run_shadow
 from football_intelligence.supabase_shadow_store import SupabaseShadowSnapshotStore
 
 
+
+def build_pregame_fi_context(jogo_info: dict) -> tuple[str, object | None, object | None]:
+    """Return a compact, deterministic FI summary for Gemini plus raw result/shadow."""
+    context = build_match_context(jogo_info)
+    if context is None:
+        return "Dados insuficientes para Football Intelligence.", None, None
+
+    result = FootballIntelligenceEngine().analyze(context)
+    odds_key = _secret("THE_ODDS_API_KEY")
+    quotes = []
+    if odds_key:
+        try:
+            quotes = fetch_pregame_quotes(jogo_info, odds_key)
+        except Exception:
+            quotes = []
+    shadow = run_shadow(context, quotes)
+
+    eligible = [x for x in shadow.assessments if x.decision.value == "BET_ELIGIBLE"]
+    watch = [x for x in shadow.assessments if x.decision.value == "WATCH"]
+
+    ranked = sorted(
+        eligible if eligible else watch,
+        key=lambda x: (
+            x.expected_value if x.expected_value is not None else -999,
+            x.edge if x.edge is not None else -999,
+            x.probability,
+        ),
+        reverse=True,
+    )
+
+    lines = [
+        f"Jogo: {jogo_info.get('nome')}",
+        f"Qualidade dados: {result.data_quality*100:.1f}%",
+        f"Qualidade modelo: {result.model_quality*100:.1f}%",
+        f"xG casa: {result.expected_home_goals:.2f}",
+        f"xG fora: {result.expected_away_goals:.2f}",
+    ]
+    if not ranked:
+        lines.append("Nenhum mercado com WATCH/BET_ELIGIBLE e preço compatível.")
+    else:
+        lines.append("Mercados ranqueados:")
+        for idx, item in enumerate(ranked[:5], start=1):
+            line = "" if item.line is None else f" {item.line}"
+            odd = f"{item.offered_odds:.2f}" if item.offered_odds is not None else "—"
+            edge_txt = f"{item.edge*100:.1f}%" if item.edge is not None else "—"
+            ev_txt = f"{item.expected_value*100:.1f}%" if item.expected_value is not None else "—"
+            fair = f"{item.fair_odds:.2f}" if getattr(item, "fair_odds", None) is not None else "—"
+            lines.append(
+                f"{idx}. {item.market} {item.selection}{line} | status {item.decision.value} | "
+                f"P modelo {item.probability*100:.1f}% | odd justa {fair} | odd mercado {odd} | "
+                f"edge {edge_txt} | EV {ev_txt}"
+            )
+    return "\n".join(lines), result, shadow
+
+
+def render_integrated_pregame_summary(jogo_info: dict, gemini_text: str, result, shadow) -> None:
+    st.markdown("### 🧠 Rei-do-Red Intelligence — Pré-Jogo Integrado")
+    st.caption("Football Intelligence escolhe o mercado; Gemini explica contexto, riscos e leitura do jogo.")
+
+    eligible = [x for x in shadow.assessments if x.decision.value == "BET_ELIGIBLE"] if shadow else []
+    if eligible:
+        best = max(
+            eligible,
+            key=lambda x: (
+                x.expected_value if x.expected_value is not None else -999,
+                x.edge if x.edge is not None else -999,
+            ),
+        )
+        line = "" if best.line is None else f" {best.line}"
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Mercado principal", f"{best.selection}{line}")
+        c2.metric("P modelo", _fmt_pct(best.probability))
+        c3.metric("Odd mercado", _fmt_num(best.offered_odds))
+        c4.metric("EV", _fmt_pct(best.expected_value))
+
+        q1, q2, q3, q4 = st.columns(4)
+        q1.metric("Odd justa", _fmt_num(getattr(best, "fair_odds", None)))
+        q2.metric("Edge", _fmt_pct(best.edge))
+        q3.metric("Dados", _fmt_pct(result.data_quality if result else None))
+        q4.metric("Modelo", _fmt_pct(result.model_quality if result else None))
+    else:
+        st.info("Nenhum BET_ELIGIBLE encontrado neste jogo. O Gemini deve tratar como sem entrada forte.")
+
+    with st.expander("🔎 Explicação integrada do Gemini", expanded=True):
+        st.write(gemini_text)
+
 def _fmt_pct(value: float | None) -> str:
     return "—" if value is None else f"{value * 100:.1f}%"
 

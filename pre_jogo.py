@@ -4,7 +4,7 @@ from ligas import LIGAS, COMPETICOES_INTERNACIONAIS
 from api_football import buscar_jogos_da_liga
 from ia_engine import gerar_analise_pre_jogo
 from formatacao import exibir_analise
-from pregame_intelligence_panel import render_pregame_intelligence
+from pregame_intelligence_panel import render_pregame_intelligence, build_pregame_fi_context, render_integrated_pregame_summary
 
 
 def tela_pre_jogo(enviar_telegram, salvar_resultado, supabase=None):
@@ -49,58 +49,54 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado, supabase=None):
         st.error("Erro ao carregar informações do jogo.")
         return
 
-    st.markdown("### 🔬 Comparação: Legado × Football Intelligence")
+    st.markdown("### 🧠 Rei-do-Red Intelligence Integrado")
     st.caption(
-        "O sistema antigo continua intacto. O motor novo roda em paralelo para você comparar as duas leituras."
+        "O Football Intelligence calcula primeiro. O Gemini recebe os mercados aprovados e explica o raciocínio, sem trocar a decisão matemática."
     )
 
-    legacy_key = f"legacy_pre_{jogo_info.get('id', jogo_escolhido)}"
+    integrated_key = f"integrated_pre_{jogo_info.get('id', jogo_escolhido)}"
 
-    col_legacy, col_shadow = st.columns(2)
-
-    with col_legacy:
-        st.markdown("#### 🧠 Legado (Gemini)")
-        st.caption("Fluxo atual do Rei-do-Red.")
-
-        if st.button("🔥 GERAR ANÁLISE LEGADA", key="gerar_pre_legado"):
-            with st.spinner("O Rei-do-Red está analisando a partida pelo fluxo legado..."):
-                try:
-                    resposta = gerar_analise_pre_jogo(jogo_info)
-                    st.session_state[legacy_key] = resposta
-
-                    enviar_telegram(
-                        "<b>🔮 PRÉ-JOGO - REI-DO-RED</b>\n\n"
-                        + jogo_info["nome"]
-                        + "\n\n"
-                        + resposta[:1000]
-                    )
-                except Exception as erro:
-                    st.error(f"Erro ao gerar análise legada: {erro}")
-
-        resposta_legada = st.session_state.get(legacy_key)
-        if resposta_legada:
-            exibir_analise(resposta_legada)
-
-            st.markdown("#### Registrar resultado:")
-            c1, c2 = st.columns(2)
-            jogo_id = str(jogo_info.get("id", jogo_escolhido))
-
-            if c1.button("✅ GREEN", key=f"green_pre_{jogo_id}"):
-                salvar_resultado(jogo_info["nome"], "GREEN", 0)
-
-            if c2.button("❌ RED", key=f"red_pre_{jogo_id}"):
-                salvar_resultado(jogo_info["nome"], "RED", 0)
-
-    with col_shadow:
-        st.markdown("#### 📐 Football Intelligence")
-        st.caption("Baseline matemático independente do Gemini.")
-
-        if st.button("🧪 GERAR ANÁLISE INTELLIGENCE", key="gerar_pre_shadow"):
+    if st.button("🔥 GERAR ANÁLISE INTEGRADA", key="gerar_pre_integrado", use_container_width=True):
+        with st.spinner("Calculando Football Intelligence e depois chamando o Gemini..."):
             try:
-                render_pregame_intelligence(
-                    jogo_info,
-                    supabase=supabase,
-                    legacy_text=st.session_state.get(legacy_key),
+                fi_context, fi_result, fi_shadow = build_pregame_fi_context(jogo_info)
+                resposta = gerar_analise_pre_jogo(jogo_info, fi_context=fi_context)
+                st.session_state[integrated_key] = {
+                    "text": resposta,
+                    "fi_context": fi_context,
+                    "result": fi_result,
+                    "shadow": fi_shadow,
+                }
+
+                enviar_telegram(
+                    "<b>🔮 PRÉ-JOGO INTEGRADO - REI-DO-RED</b>\n\n"
+                    + jogo_info["nome"]
+                    + "\n\n"
+                    + resposta[:1000]
                 )
             except Exception as erro:
-                st.error(f"Erro no Football Intelligence: {erro}")
+                st.error(f"Erro ao gerar análise integrada: {erro}")
+
+    integrated = st.session_state.get(integrated_key)
+    if integrated:
+        render_integrated_pregame_summary(
+            jogo_info,
+            integrated["text"],
+            integrated["result"],
+            integrated["shadow"],
+        )
+
+        with st.expander("📐 Ver detalhes matemáticos do Football Intelligence"):
+            render_pregame_intelligence(
+                jogo_info,
+                supabase=supabase,
+                legacy_text=integrated["text"],
+            )
+
+        st.markdown("#### Registrar resultado:")
+        c1, c2 = st.columns(2)
+        jogo_id = str(jogo_info.get("id", jogo_escolhido))
+        if c1.button("✅ GREEN", key=f"green_pre_{jogo_id}"):
+            salvar_resultado(jogo_info["nome"], "GREEN", 0)
+        if c2.button("❌ RED", key=f"red_pre_{jogo_id}"):
+            salvar_resultado(jogo_info["nome"], "RED", 0)
