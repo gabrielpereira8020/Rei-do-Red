@@ -457,7 +457,7 @@ def test_pregame_alternative_value_requires_real_matching_quote():
     assert result[0].odds == 1.55
 
 
-def test_pregame_combo_only_uses_eligible_different_fixtures():
+def test_pregame_combo_allows_same_fixture_when_legs_are_individually_eligible():
     from football_intelligence.pregame_value import PregameValueCandidate, build_pregame_value_combos
 
     def c(fid, odds, p, ev, status="BET_ELIGIBLE"):
@@ -487,5 +487,11 @@ def test_pregame_combo_only_uses_eligible_different_fixtures():
         c(3, 1.10, 0.94, 0.034, status="WATCH"),
     ])
     assert combos
-    assert len({leg.fixture_id for leg in combos[0].legs}) == len(combos[0].legs)
     assert all(leg.status == "BET_ELIGIBLE" for leg in combos[0].legs)
+
+    same_game = build_pregame_value_combos([
+        c(1, 1.20, 0.88, 0.056),
+        c(1, 1.25, 0.86, 0.075),
+    ])
+    assert same_game
+    assert all(leg.fixture_id == 1 for leg in same_game[0].legs)
