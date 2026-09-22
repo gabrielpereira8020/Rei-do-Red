@@ -56,7 +56,8 @@ def build_pregame_fi_context(jogo_info: dict) -> tuple[str, object | None, objec
     else:
         lines.append("Mercados ranqueados:")
         for idx, item in enumerate(ranked[:5], start=1):
-            line = "" if item.line is None else f" {item.line}"
+            item_line = getattr(item, "line", None)
+            line = "" if item_line is None else f" {item_line}"
             odd = f"{item.offered_odds:.2f}" if item.offered_odds is not None else "—"
             edge_txt = f"{item.edge*100:.1f}%" if item.edge is not None else "—"
             ev_txt = f"{item.expected_value*100:.1f}%" if item.expected_value is not None else "—"
@@ -82,7 +83,8 @@ def render_integrated_pregame_summary(jogo_info: dict, gemini_text: str, result,
                 x.edge if x.edge is not None else -999,
             ),
         )
-        line = "" if best.line is None else f" {best.line}"
+        best_line = getattr(best, "line", None)
+        line = "" if best_line is None else f" {best_line}"
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Mercado principal", f"{best.selection}{line}")
         c2.metric("P modelo", _fmt_pct(best.probability))
