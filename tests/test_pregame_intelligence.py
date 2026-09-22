@@ -196,3 +196,14 @@ def test_expanded_leagues_are_available():
     assert LIGAS["Austria"]["Bundesliga"] == 218
     assert LIGAS["Suica"]["Super League"] == 207
     assert LIGAS["Turquia"]["Super Lig"] == 203
+
+
+def test_gemini_live_is_bound_to_football_intelligence():
+    from pathlib import Path
+    ia = Path("ia_engine.py").read_text(encoding="utf-8")
+    radar = Path("radar_ao_vivo_automatico.py").read_text(encoding="utf-8")
+    ao = Path("ao_vivo.py").read_text(encoding="utf-8")
+    assert "fi_signals=None" in ia
+    assert "Football Intelligence é a fonte principal" in ia
+    assert "fi_signals=actionable" in radar
+    assert "fi_signals=live_result.signals" in ao
