@@ -518,3 +518,10 @@ def test_pregame_gemini_is_bound_to_football_intelligence():
     assert "build_pregame_fi_context" in pre
     assert "render_integrated_pregame_summary" in pre
     assert "def build_pregame_fi_context" in panel
+
+
+def test_integrated_pregame_does_not_require_marketassessment_line_attribute():
+    from pathlib import Path
+    panel = Path("pregame_intelligence_panel.py").read_text(encoding="utf-8")
+    assert 'getattr(item, "line", None)' in panel
+    assert 'getattr(best, "line", None)' in panel
