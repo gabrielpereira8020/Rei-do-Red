@@ -150,7 +150,7 @@ FIM
 # =====================================================
 # AO VIVO
 # =====================================================
-def gerar_analise_ao_vivo(jogo, previsao_anterior=None):
+def gerar_analise_ao_vivo(jogo, previsao_anterior=None, fi_signals=None):
     """
     previsao_anterior: dict opcional {"mercado": str, "confianca": int, "minuto": str}
     com a última previsão que a IA deu para ESTE MESMO jogo. Isso dá
@@ -165,6 +165,31 @@ def gerar_analise_ao_vivo(jogo, previsao_anterior=None):
     fora = jogo["fora"]
 
     bloco_previsao_anterior = ""
+    bloco_fi = ""
+    if fi_signals:
+        linhas = []
+        for s in fi_signals:
+            try:
+                fair = f"{s.fair_odds:.2f}" if s.fair_odds is not None else "—"
+                linhas.append(
+                    f"- {s.label}: {s.probability*100:.1f}% | status {s.status} | odd justa {fair} | motivo: {s.reason}"
+                )
+            except Exception:
+                pass
+        if linhas:
+            bloco_fi = """
+FOOTBALL INTELLIGENCE — SINAIS JÁ CALCULADOS PELO MOTOR MATEMÁTICO:
+""" + "\n".join(linhas) + """
+
+REGRA DE HIERARQUIA — OBRIGATÓRIA:
+- O Football Intelligence é a fonte principal para escolher o mercado.
+- Você NÃO pode recomendar um mercado que contradiga o melhor SIGNAL do Football Intelligence.
+- Se houver SIGNAL, explique e contextualize ESSE SIGNAL.
+- Se houver vários SIGNALS, priorize o de maior probabilidade.
+- Se não houver SIGNAL, você pode explicar os WATCH, mas NÃO deve criar uma entrada nova por conta própria.
+- Não altere a probabilidade calculada pelo Football Intelligence.
+- Sua função aqui é interpretar contexto, riscos e tornar o sinal fácil de entender.
+"""
     if previsao_anterior:
         bloco_previsao_anterior = f"""
 SUA PREVISÃO ANTERIOR PARA ESSE MESMO JOGO (feita aos {previsao_anterior.get('minuto','?')}'):
@@ -190,6 +215,7 @@ Responda SOMENTE em texto puro, SEM asteriscos, SEM markdown, SEM negrito.
 Analise o momento ATUAL da partida com TODOS os dados ao vivo abaixo:
 
 {contexto}
+{bloco_fi}
 {bloco_previsao_anterior}
 INSTRUÇÕES:
 - Use os eventos reais (gols, cartões, subs) para entender o momento do jogo
@@ -197,9 +223,9 @@ INSTRUÇÕES:
 - Use passes e posse para avaliar domínio do jogo
 - Use chutes bloqueados e defesas do goleiro para avaliar pressão real
 - Use as odds ao vivo se disponíveis para calibrar a análise
-- Escolha OS 1 (UM) mercado em que você mais confia agora — não tente
-  cobrir todos os mercados com a mesma força. É melhor 1 previsão forte
-  do que 3 fracas.
+- Se o bloco FOOTBALL INTELLIGENCE estiver presente, a previsão principal DEVE ser o melhor SIGNAL dele.
+- Não invente outro mercado concorrente quando já existir SIGNAL.
+- Se não existir SIGNAL, diga claramente que não há entrada forte e explique o melhor WATCH.
 - A confiança deve refletir uma convicção real: só use 75%+ se você
   realmente acredita que vai acontecer, baseado em padrão consistente
   dos dados — não infle o número artificialmente.
@@ -207,16 +233,16 @@ INSTRUÇÕES:
 Responda EXATAMENTE neste formato:
 
 🎯 PREVISÃO PRINCIPAL:
-(o mercado específico em que você mais confia agora, ex: "Over 2.5 FT" ou "Cartão para o Time X")
+(o mesmo mercado aprovado pelo Football Intelligence; se não houver SIGNAL, escreva "SEM ENTRADA FORTE")
 
 📊 CONFIANÇA:
-(um número de 0 a 100, representando % de convicção real)
+(use a probabilidade do SIGNAL principal do Football Intelligence quando houver SIGNAL; se não houver, use a do melhor WATCH)
 
 🧠 POR QUE ISSO VAI ACONTECER:
 (explique o raciocínio de forma afirmativa e decisiva — não "pode acontecer", mas "vai acontecer porque X, Y, Z" com base nos dados reais)
 
 ⚡ ENTRADA RECOMENDADA:
-(qual mercado entrar AGORA e por quê — baseado nos dados reais)
+(repita o mercado aprovado pelo Football Intelligence e explique por que o contexto ao vivo confirma ou enfraquece esse sinal; se não houver SIGNAL, escreva "AGUARDAR")
 
 ⚽ GOLS AO VIVO:
 (tendência de gols baseada em chutes, pressão e odds ao vivo)
