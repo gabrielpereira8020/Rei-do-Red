@@ -18,6 +18,7 @@ from football_intelligence.alternative_markets import estimate_corners_and_cards
 from football_intelligence.pregame_adapter import build_match_context
 from football_intelligence.player_props import estimate_player_props, best_player_props
 from football_intelligence.pregame_market import fetch_pregame_quotes
+from football_intelligence.pregame_value import alternative_value_candidates, build_pregame_value_combos
 from football_intelligence.shadow import run_shadow
 from ligas import LIGAS, COMPETICOES_INTERNACIONAIS
 
@@ -108,6 +109,14 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
     candidate = _best_candidate(shadow)
 
     alternatives = estimate_corners_and_cards(jogo)
+    alternative_values = alternative_value_candidates(
+        fixture_id=int(jogo.get("id")),
+        game=jogo.get("nome") or "",
+        estimates=alternatives,
+        quotes=quotes,
+        data_quality=result.data_quality,
+        model_quality=result.model_quality,
+    )
     recent_profile = recent_market_profile(jogo)
     best_corners = max((v for v in alternatives.values() if v.market == "TOTAL_CORNERS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
     best_cards = max((v for v in alternatives.values() if v.market == "TOTAL_CARDS" and v.probability_over is not None), key=lambda x: x.probability_over, default=None)
@@ -131,6 +140,7 @@ def _scan_match(jogo: dict, odds_key: str | None) -> dict | None:
         "candidate": candidate,
         "status": candidate.decision.value if candidate is not None else "NO_MARKET",
         "alternatives": alternatives,
+        "alternative_values": alternative_values,
         "best_corners": best_corners,
         "best_cards": best_cards,
         "recent_profile": recent_profile,
@@ -250,6 +260,57 @@ def tela_painel_do_dia() -> None:
 
     st.success(f"{len(rows)} jogo(s) calculados.")
 
+    pregame_candidates = []
+    for row in rows:
+        candidate = row.get("candidate")
+        if candidate is not None and candidate.decision.value == "BET_ELIGIBLE" and candidate.offered_odds:
+            from football_intelligence.pregame_value import PregameValueCandidate
+            pregame_candidates.append(
+                PregameValueCandidate(
+                    fixture_id=int(row["fixture_id"]),
+                    game=row["game"],
+                    market=candidate.market,
+                    line=getattr(candidate, "line", None),
+                    selection=candidate.selection,
+                    odds=candidate.offered_odds,
+                    model_probability=candidate.probability,
+                    market_probability_raw=(1.0 / candidate.offered_odds),
+                    market_probability_devig=candidate.market_probability_devig,
+                    edge=candidate.edge or 0.0,
+                    expected_value=candidate.expected_value or 0.0,
+                    data_quality=row["data_quality"],
+                    model_quality=row["model_quality"],
+                    status="BET_ELIGIBLE",
+                    bookmaker=getattr(candidate, "bookmaker", "") or "",
+                    label=_candidate_label(candidate),
+                )
+            )
+        pregame_candidates.extend(row.get("alternative_values") or [])
+
+    eligible_values = [c for c in pregame_candidates if c.status == "BET_ELIGIBLE"]
+    combos = build_pregame_value_combos(eligible_values)
+
+    if eligible_values:
+        st.markdown("### 💎 Value Scanner Pré-Jogo")
+        for item in sorted(eligible_values, key=lambda x: (x.expected_value, x.edge), reverse=True)[:10]:
+            st.write(
+                f"**{item.game} — {item.label} @ {item.odds:.2f}** | "
+                f"Modelo {item.model_probability*100:.1f}% | "
+                f"Edge {item.edge*100:.1f}% | EV {item.expected_value*100:.1f}% | "
+                f"{item.status}"
+            )
+
+    if combos:
+        combo = combos[0]
+        st.markdown("### 🧩 Value Combo Pré-Jogo")
+        for leg in combo.legs:
+            st.write(f"• {leg.game} — {leg.label} @ {leg.odds:.2f}")
+        st.caption(
+            f"Odd combinada {combo.combined_odds:.2f} • "
+            f"Prob. modelo combinada {combo.combined_probability*100:.1f}% • "
+            f"EV combinado {combo.expected_value*100:.1f}%"
+        )
+
     f1, f2 = st.columns(2)
     with f1:
         statuses = sorted({r["status"] for r in rows})
@@ -295,6 +356,13 @@ def tela_painel_do_dia() -> None:
             hr2.metric("Casa L10", _fmt_pct(hit_rate(home_vals[:10], item.line)))
             hr3.metric("Fora L5", _fmt_pct(hit_rate(away_vals[:5], item.line)))
             hr4.metric("Fora L10", _fmt_pct(hit_rate(away_vals[:10], item.line)))
+            values = [v for v in row.get("alternative_values", []) if v.market == "TOTAL_CORNERS"]
+            if values:
+                best_value = values[0]
+                st.caption(
+                    f"Valor real: {best_value.label} @ {best_value.odds:.2f} • "
+                    f"Edge {best_value.edge*100:.1f}% • EV {best_value.expected_value*100:.1f}% • {best_value.status}"
+                )
             with st.expander("Ver linhas de escanteios"):
                 rows_alt = []
                 for alt in row.get("alternatives", {}).values():
@@ -330,6 +398,13 @@ def tela_painel_do_dia() -> None:
             hr2.metric("Casa L10", _fmt_pct(hit_rate(home_vals[:10], item.line)))
             hr3.metric("Fora L5", _fmt_pct(hit_rate(away_vals[:5], item.line)))
             hr4.metric("Fora L10", _fmt_pct(hit_rate(away_vals[:10], item.line)))
+            values = [v for v in row.get("alternative_values", []) if v.market == "TOTAL_CARDS"]
+            if values:
+                best_value = values[0]
+                st.caption(
+                    f"Valor real: {best_value.label} @ {best_value.odds:.2f} • "
+                    f"Edge {best_value.edge*100:.1f}% • EV {best_value.expected_value*100:.1f}% • {best_value.status}"
+                )
             with st.expander("Ver linhas de cartões"):
                 rows_alt = []
                 for alt in row.get("alternatives", {}).values():

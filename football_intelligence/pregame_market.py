@@ -74,6 +74,41 @@ def _quotes_from_the_odds_api(payload: dict[str, Any] | None) -> list[OddsQuote]
                         OddsQuote(bookmaker, "TOTAL_GOALS", selection, price, captured_at, float(point))
                     )
 
+            elif key in {"alternate_totals", "alternate_spreads"}:
+                # Not mapped here: these provider-specific keys are not reliably
+                # equivalent to corners/cards totals without an explicit market id.
+                continue
+
+            elif key in {"totals_corners", "corners", "alternate_totals_corners"}:
+                for outcome in outcomes:
+                    price = _safe_float(outcome.get("price"))
+                    point = outcome.get("point")
+                    if price is None or point is None:
+                        continue
+                    name = _norm(outcome.get("name"))
+                    if name == "over":
+                        selection = "OVER"
+                    elif name == "under":
+                        selection = "UNDER"
+                    else:
+                        continue
+                    quotes.append(OddsQuote(bookmaker, "TOTAL_CORNERS", selection, price, captured_at, float(point)))
+
+            elif key in {"totals_cards", "cards", "alternate_totals_cards"}:
+                for outcome in outcomes:
+                    price = _safe_float(outcome.get("price"))
+                    point = outcome.get("point")
+                    if price is None or point is None:
+                        continue
+                    name = _norm(outcome.get("name"))
+                    if name == "over":
+                        selection = "OVER"
+                    elif name == "under":
+                        selection = "UNDER"
+                    else:
+                        continue
+                    quotes.append(OddsQuote(bookmaker, "TOTAL_CARDS", selection, price, captured_at, float(point)))
+
             elif key == "btts":
                 for outcome in outcomes:
                     price = _safe_float(outcome.get("price"))
