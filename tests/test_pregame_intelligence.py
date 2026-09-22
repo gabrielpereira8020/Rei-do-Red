@@ -505,3 +505,16 @@ def test_pregame_premium_value_card_ui_exists():
     assert "def _entry_score" in painel
     assert "value-card-premium" in painel
     assert ".value-card-premium" in main
+
+
+def test_pregame_gemini_is_bound_to_football_intelligence():
+    from pathlib import Path
+    ia = Path("ia_engine.py").read_text(encoding="utf-8")
+    pre = Path("pre_jogo.py").read_text(encoding="utf-8")
+    panel = Path("pregame_intelligence_panel.py").read_text(encoding="utf-8")
+    assert "def gerar_analise_pre_jogo(jogo, fi_context=None)" in ia
+    assert "Football Intelligence é a fonte principal" in ia
+    assert "GERAR ANÁLISE INTEGRADA" in pre
+    assert "build_pregame_fi_context" in pre
+    assert "render_integrated_pregame_summary" in pre
+    assert "def build_pregame_fi_context" in panel
