@@ -167,12 +167,37 @@ def tela_ao_vivo(fetch_api, enviar_telegram, salvar_resultado):
 
                     st.caption(f"Restante projetado: {live_result.expected_remaining_corners:.2f} escanteios • {live_result.expected_remaining_cards:.2f} cartões")
 
+                    st.markdown("##### ⚡ Sinais do motor")
                     for signal in live_result.signals:
                         fair_text = f"{signal.fair_odds:.2f}" if signal.fair_odds is not None else "—"
-                        st.write(
-                            f"**{signal.label}** — {signal.probability*100:.1f}% "
-                            f"| odd justa {fair_text} | {signal.status}"
+                        badge_class = {
+                            "SIGNAL": "badge-signal",
+                            "WATCH": "badge-watch",
+                            "NO_BET": "badge-no",
+                            "INSUFFICIENT_DATA": "badge-data",
+                        }.get(signal.status, "badge-data")
+                        st.markdown(
+                            "<div class='signal-card'>"
+                            f"<div class='signal-title'>{signal.label}"
+                            f"<span class='badge {badge_class}'>{signal.status}</span></div>"
+                            f"<div class='signal-meta'>Probabilidade {signal.probability*100:.1f}% · Odd justa {fair_text}</div>"
+                            f"<div class='signal-meta'>{signal.reason}</div>"
+                            "</div>",
+                            unsafe_allow_html=True,
                         )
+
+                    st.markdown("##### ⏱️ Janelas rápidas")
+                    window_signals = [
+                        s for s in live_result.signals
+                        if s.key in {"corner_next_10m", "card_next_10m", "goal_next_10m"}
+                    ]
+                    if window_signals:
+                        cols = st.columns(len(window_signals))
+                        for col, signal in zip(cols, window_signals):
+                            with col:
+                                fair_text = f"{signal.fair_odds:.2f}" if signal.fair_odds is not None else "—"
+                                st.metric(signal.label, f"{signal.probability*100:.1f}%")
+                                st.caption(f"Odd justa {fair_text} · {signal.status}")
 
                     resposta = gerar_analise_ao_vivo(jogo_info, fi_signals=live_result.signals)
                     exibir_analise_ao_vivo(
