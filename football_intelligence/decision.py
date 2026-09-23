@@ -47,6 +47,7 @@ def build_assessment(
     market: str,
     selection: str,
     probability: float,
+    line: float | None = None,
     offered_odds: float | None,
     market_probability_devig: float | None,
     fair_odds: float | None,
@@ -59,6 +60,7 @@ def build_assessment(
 ) -> MarketAssessment:
     decision, reasons = decide(
         probability=probability,
+        line=line,
         offered_odds=offered_odds,
         market_probability_devig=market_probability_devig,
         data_quality=data_quality,
@@ -107,6 +109,7 @@ def assess_market(
         market=probability.market,
         selection=probability.selection,
         probability=probability.probability,
+        line=probability.line,
         offered_odds=None if quote is None else quote.decimal_odds,
         market_probability_devig=market_probability_devig,
         fair_odds=probability.fair_odds,
