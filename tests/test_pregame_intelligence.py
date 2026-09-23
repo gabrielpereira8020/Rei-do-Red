@@ -525,3 +525,13 @@ def test_integrated_pregame_does_not_require_marketassessment_line_attribute():
     panel = Path("pregame_intelligence_panel.py").read_text(encoding="utf-8")
     assert 'getattr(item, "line", None)' in panel
     assert 'getattr(best, "line", None)' in panel
+
+
+def test_pregame_gemini_has_fallback_model_and_graceful_outage():
+    from pathlib import Path
+    ia = Path("ia_engine.py").read_text(encoding="utf-8")
+    pre = Path("pre_jogo.py").read_text(encoding="utf-8")
+    assert "models/gemini-2.5-flash-lite" in ia
+    assert "GEMINI INDISPONÍVEL NO MOMENTO" in ia
+    assert "A decisão matemática do Football Intelligence continua válida" in ia
+    assert "Gemini indisponível no momento" in pre
