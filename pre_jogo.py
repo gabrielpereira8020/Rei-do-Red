@@ -68,12 +68,24 @@ def tela_pre_jogo(enviar_telegram, salvar_resultado, supabase=None):
                     "shadow": fi_shadow,
                 }
 
-                enviar_telegram(
+                fi_header = (
                     "<b>🔮 PRÉ-JOGO INTEGRADO - REI-DO-RED</b>\n\n"
                     + jogo_info["nome"]
                     + "\n\n"
-                    + resposta[:1000]
+                    + fi_context[:1200]
                 )
+                if "GEMINI INDISPONÍVEL" in resposta:
+                    enviar_telegram(
+                        fi_header
+                        + "\n\n⚠️ Gemini indisponível no momento. "
+                        + "A decisão acima veio do Football Intelligence."
+                    )
+                else:
+                    enviar_telegram(
+                        fi_header
+                        + "\n\n🧠 Gemini:\n"
+                        + resposta[:1200]
+                    )
             except Exception as erro:
                 st.error(f"Erro ao gerar análise integrada: {erro}")
 
