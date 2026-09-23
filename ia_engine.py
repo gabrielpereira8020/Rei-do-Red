@@ -21,11 +21,30 @@ def _chamar_gemini_com_retry(prompt, max_tentativas=3, espera_base=5):
 
     for tentativa in range(1, max_tentativas + 1):
         try:
-            response = client.models.generate_content(
-                model="models/gemini-3.1-flash-lite",
-                contents=prompt
-            )
-            return response.text
+            modelos = [
+                "models/gemini-3.1-flash-lite",
+                "models/gemini-2.5-flash-lite",
+            ]
+            ultimo_erro_modelo = None
+            for modelo in modelos:
+                try:
+                    response = client.models.generate_content(
+                        model=modelo,
+                        contents=prompt
+                    )
+                    return response.text
+                except Exception as model_error:
+                    ultimo_erro_modelo = model_error
+                    erro_modelo = str(model_error)
+                    eh_503_modelo = (
+                        "503" in erro_modelo
+                        or "UNAVAILABLE" in erro_modelo
+                        or "overloaded" in erro_modelo.lower()
+                        or "high demand" in erro_modelo.lower()
+                    )
+                    if not eh_503_modelo:
+                        raise
+            raise ultimo_erro_modelo
 
         except Exception as e:
             ultima_excecao = e
@@ -145,22 +164,13 @@ FIM
     try:
         return _chamar_gemini_com_retry(prompt)
     except Exception as e:
+        erro = str(e)
         return (
-            "🔥 APOSTA CRAVADA:\nErro\n"
-            "📊 CONFIANÇA:\n0\n"
-            "💎 OPORTUNIDADE DE OURO:\nErro\n"
-            "⚽ GOLS:\nErro\n"
-            "🚩 ESCANTEIOS:\nErro\n"
-            "🟨 CARTÕES:\nErro\n"
-            "🎯 JOGADORES:\nErro\n"
-            "📈 SCORE GOLS:\n0\n"
-            "📈 SCORE ESCANTEIOS:\n0\n"
-            "📈 SCORE CARTÕES:\n0\n"
-            f"⚠️ RISCO:\n{str(e)}\n"
-            "🔮 FEELING:\nErro\n"
-            f"📊 PROJEÇÃO {jogo['casa']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\nFALTAS: 0\nFINALIZAÇÕES: 0\n"
-            f"📊 PROJEÇÃO {jogo['fora']}:\nGOLS: 0\nESCANTEIOS: 0\nCARTÕES: 0\nFALTAS: 0\nFINALIZAÇÕES: 0\n"
-            "FIM"
+            "⚠️ GEMINI INDISPONÍVEL NO MOMENTO\n"
+            "O Football Intelligence foi calculado normalmente, mas a camada explicativa do Gemini não respondeu.\n\n"
+            f"Detalhe técnico: {erro}\n\n"
+            "A decisão matemática do Football Intelligence continua válida e deve ser exibida separadamente pela interface.\n"
+            "Não gere aposta alternativa por conta própria enquanto o Gemini estiver indisponível."
         )
 
 
