@@ -33,9 +33,16 @@ def build_pregame_fi_context(jogo_info: dict) -> tuple[str, object | None, objec
 
     eligible = [x for x in shadow.assessments if x.decision.value == "BET_ELIGIBLE"]
     watch = [x for x in shadow.assessments if x.decision.value == "WATCH"]
+    suggestion_pool = [
+        x for x in watch
+        if x.offered_odds is None
+        and x.probability >= 0.70
+        and x.data_quality >= 0.75
+        and x.model_quality >= 0.35
+    ]
 
     ranked = sorted(
-        eligible if eligible else watch,
+        eligible if eligible else (suggestion_pool if suggestion_pool else watch),
         key=lambda x: (
             x.expected_value if x.expected_value is not None else -999,
             x.edge if x.edge is not None else -999,
@@ -54,6 +61,11 @@ def build_pregame_fi_context(jogo_info: dict) -> tuple[str, object | None, objec
     if not ranked:
         lines.append("Nenhum mercado com WATCH/BET_ELIGIBLE e preço compatível.")
     else:
+        if not eligible and suggestion_pool:
+            lines.append(
+                "MODO SUGESTÃO: não há preço de mercado suficiente para validar valor. "
+                "Os itens abaixo são somente indicações estatísticas e NÃO são BET_ELIGIBLE."
+            )
         lines.append("Mercados ranqueados:")
         for idx, item in enumerate(ranked[:5], start=1):
             item_line = getattr(item, "line", None)
@@ -97,7 +109,25 @@ def render_integrated_pregame_summary(jogo_info: dict, gemini_text: str, result,
         q3.metric("Dados", _fmt_pct(result.data_quality if result else None))
         q4.metric("Modelo", _fmt_pct(result.model_quality if result else None))
     else:
-        st.info("Nenhum BET_ELIGIBLE encontrado neste jogo. O Gemini deve tratar como sem entrada forte.")
+        suggestions = [
+            x for x in shadow.assessments
+            if x.decision.value == "WATCH"
+            and x.offered_odds is None
+            and x.probability >= 0.70
+            and x.data_quality >= 0.75
+            and x.model_quality >= 0.35
+        ] if shadow else []
+        if suggestions:
+            best_suggestion = max(suggestions, key=lambda x: x.probability)
+            line = "" if best_suggestion.line is None else f" {best_suggestion.line}"
+            st.warning(
+                f"Sem BET_ELIGIBLE porque não há odd completa para validar valor. "
+                f"Sugestão estatística: {best_suggestion.market} {best_suggestion.selection}{line} "
+                f"com P modelo {_fmt_pct(best_suggestion.probability)} e odd justa {_fmt_num(best_suggestion.fair_odds)}. "
+                "Isto é feeling/modelo, não entrada validada por preço."
+            )
+        else:
+            st.info("Nenhum BET_ELIGIBLE e nenhuma sugestão estatística forte encontrada neste jogo.")
 
     with st.expander("🔎 Explicação integrada do Gemini", expanded=True):
         st.write(gemini_text)
