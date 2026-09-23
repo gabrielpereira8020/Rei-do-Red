@@ -535,3 +535,24 @@ def test_pregame_gemini_has_fallback_model_and_graceful_outage():
     assert "GEMINI INDISPONÍVEL NO MOMENTO" in ia
     assert "A decisão matemática do Football Intelligence continua válida" in ia
     assert "Gemini indisponível no momento" in pre
+
+
+def test_market_assessment_preserves_line_for_pregame_suggestions():
+    from football_intelligence.engine import FootballIntelligenceEngine
+    from football_intelligence.shadow import run_shadow
+    snapshot = run_shadow(_context(), odds=())
+    over25 = next(
+        x for x in snapshot.assessments
+        if x.market == "TOTAL_GOALS" and x.selection == "OVER" and x.line == 2.5
+    )
+    assert over25.line == 2.5
+
+
+def test_pregame_suggestion_mode_is_labeled_not_validated():
+    from pathlib import Path
+    panel = Path("pregame_intelligence_panel.py").read_text(encoding="utf-8")
+    ia = Path("ia_engine.py").read_text(encoding="utf-8")
+    assert "MODO SUGESTÃO" in panel
+    assert "Sugestão estatística" in panel
+    assert "SUGESTÃO / FEELING" in ia
+    assert "SEM ENTRADA VALIDADA" in ia
