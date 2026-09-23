@@ -167,6 +167,7 @@ class MarketAssessment:
     market: str
     selection: str
     probability: float
+    line: Optional[float] = None
     offered_odds: Optional[float]
     market_probability_devig: Optional[float]
     fair_odds: Optional[float]
