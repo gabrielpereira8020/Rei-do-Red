@@ -535,3 +535,11 @@ def test_pregame_gemini_has_fallback_model_and_graceful_outage():
     assert "GEMINI INDISPONÍVEL NO MOMENTO" in ia
     assert "A decisão matemática do Football Intelligence continua válida" in ia
     assert "Gemini indisponível no momento" in pre
+
+
+def test_international_competition_catalog_is_expanded():
+    from ligas import COMPETICOES_INTERNACIONAIS
+    assert "UEFA Nations League" in COMPETICOES_INTERNACIONAIS
+    assert "Africa Cup of Nations - Qualification" in COMPETICOES_INTERNACIONAIS
+    assert "World Cup - Qualification Europe" in COMPETICOES_INTERNACIONAIS
+    assert "CONCACAF Nations League" in COMPETICOES_INTERNACIONAIS
